@@ -1,9 +1,53 @@
-# Python
+# Python & Virtual Environments
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+env/
 venv/
-.env
+ENV/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# OS / IDE
-.DS_Store
+# Environment & Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Streamlit
+.streamlit/
+
+# MATLAB / Simulink Simulation Artifacts
+*.asv
+*.m~
+*.mat
+*.fig
+*.slx.autosave
+slprj/
+sfprj/
+*.mex*
+*.log
+
+# IDE & Editor configs
 .vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db

@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import math
 import requests
 from dotenv import load_dotenv
 
@@ -16,6 +17,36 @@ def get_api_key(api_key: str | None = None) -> str | None:
     if key and key.strip() and key.strip() != "your_nebius_api_key_here":
         return key.strip()
     return None
+
+def compute_shared_autonomy_arbitration(
+    hazard_risk: int,
+    clearance_left: float,
+    clearance_right: float,
+    min_safe_clearance: float = 0.35,
+    is_emergency: bool = False
+) -> float:
+    """
+    Computes the dynamic arbitration blending factor alpha in [0.0, 1.0].
+    alpha = 0.0 -> 100% human joystick control
+    alpha = 1.0 -> 100% autonomous copilot trajectory override / emergency stop
+    
+    Formula blends normalized hazard risk and lateral clearance penetration:
+    alpha = clip( 0.6 * (risk / 100) + 0.4 * max(0, (min_safe - min_clearance) / min_safe), 0.0, 1.0 )
+    """
+    if is_emergency:
+        return 1.0
+
+    min_clearance = min(clearance_left, clearance_right)
+    risk_factor = min(1.0, max(0.0, hazard_risk / 100.0))
+    
+    clearance_penalty = 0.0
+    if min_clearance < min_safe_clearance:
+        clearance_penalty = (min_safe_clearance - max(0.0, min_clearance)) / min_safe_clearance
+
+    raw_alpha = (0.55 * risk_factor) + (0.45 * clearance_penalty)
+    # Apply smooth sigmoid-like tapering for subtle adjustments
+    alpha = max(0.0, min(1.0, round(raw_alpha, 3)))
+    return alpha
 
 def simulate_spatial_inference(
     user_intent: str,
@@ -33,16 +64,17 @@ def simulate_spatial_inference(
         # Corridor width: 1.2m (-0.6 to +0.6)
         # Wheelchair nominal width ~0.65m.
         # Steering deviation affects left/right clearance
-        rad = steering_deg * (3.14159 / 180.0)
+        rad = math.radians(steering_deg)
         left_clearance = max(0.08, round(0.40 - (rad * 0.4), 2))
         right_clearance = max(0.08, round(0.40 + (rad * 0.4), 2))
         correction = -steering_deg
         hazard_risk = min(90, max(5, int(abs(steering_deg) * 1.8)))
         emergency_stop = hazard_risk > 75
         recommended_vel = 0.0 if emergency_stop else round(min(speed_mps, 0.6), 2)
+        dist_to_hazard = 2.5
         summary = (
             f"Tight Corridor detected (width: 1.2m). Lateral deviation of {steering_deg:+.1f}° "
-            f"requires a {correction:+.1f}° shared-autonomy correction to maintain safe clearance."
+            f"requires a {correction:+.1f}° shared-autonomy correction to maintain safe wall clearance."
         )
 
     elif "table" in intent_norm or "dock" in intent_norm:
@@ -53,6 +85,7 @@ def simulate_spatial_inference(
         hazard_risk = min(80, max(10, int(abs(steering_deg) * 1.2 + (speed_mps * 20))))
         emergency_stop = False
         recommended_vel = round(min(speed_mps, 0.3), 2)
+        dist_to_hazard = 1.8
         summary = (
             f"Docking bay at Table identified at Y=3.5m. Regulating approach speed to "
             f"{recommended_vel} m/s and applying {correction:+.1f}° centering vector."
@@ -66,8 +99,9 @@ def simulate_spatial_inference(
         hazard_risk = 96
         emergency_stop = True
         recommended_vel = 0.0
+        dist_to_hazard = 0.45
         summary = (
-            "CRITICAL: Unscheduled dynamic hazard detected 1.5m ahead directly in trajectory path. "
+            "CRITICAL: Dynamic hazard detected 0.45m ahead directly in trajectory path. "
             "Autonomous emergency braking (AEB) triggered. Wheelchair halted."
         )
 
@@ -79,10 +113,20 @@ def simulate_spatial_inference(
         hazard_risk = min(85, max(8, int(abs(steering_deg) * 1.4)))
         emergency_stop = hazard_risk > 70
         recommended_vel = 0.0 if emergency_stop else round(min(speed_mps, 0.7), 2)
+        dist_to_hazard = 3.5
         summary = (
-            f"Doorway detected at Y=4.5m (1.4m clearance). Compensating user steering "
+            f"Doorway detected at Y=4.5m (1.4m opening). Compensating user steering "
             f"by {correction:+.1f}° to center trajectory through gateway."
         )
+
+    alpha = compute_shared_autonomy_arbitration(
+        hazard_risk=hazard_risk,
+        clearance_left=left_clearance,
+        clearance_right=right_clearance,
+        is_emergency=emergency_stop
+    )
+
+    ttc = round(dist_to_hazard / max(0.05, speed_mps), 2) if not emergency_stop else 0.0
 
     res = {
         "status": "SUCCESS",
@@ -90,12 +134,14 @@ def simulate_spatial_inference(
         "model": "nvidia/nemotron-3-ultra (simulated)",
         "user_intent": user_intent,
         "steering_correction_deg": round(correction, 1),
+        "arbitration_alpha": alpha,
         "speed_buffer_override": "EMERGENCY_BRAKE" if emergency_stop else ("ACTIVE" if recommended_vel < speed_mps else "NOMINAL"),
         "recommended_velocity": f"{recommended_vel} m/s",
         "clearance_left": left_clearance,
         "clearance_right": right_clearance,
         "hazard_risk_score": hazard_risk,
         "emergency_stop": emergency_stop,
+        "time_to_collision_sec": ttc,
         "spatial_summary": summary
     }
     if accessibility_context:
@@ -143,6 +189,8 @@ def analyze_spatial_frame(
         '  "clearance_right": <float in meters>,\n'
         '  "hazard_risk_score": <int between 0 and 100>,\n'
         '  "emergency_stop": <boolean>,\n'
+        '  "arbitration_alpha": <float between 0.0 and 1.0>,\n'
+        '  "time_to_collision_sec": <float>,\n'
         '  "spatial_summary": "<clear 1-2 sentence explanation>"\n'
         "}"
     )
@@ -185,6 +233,16 @@ def analyze_spatial_frame(
         parsed["source"] = "nebius_cloud"
         parsed["model"] = model
         parsed["user_intent"] = user_intent
+
+        # Ensure arbitration_alpha is populated
+        if "arbitration_alpha" not in parsed:
+            parsed["arbitration_alpha"] = compute_shared_autonomy_arbitration(
+                hazard_risk=parsed.get("hazard_risk_score", 20),
+                clearance_left=parsed.get("clearance_left", 0.4),
+                clearance_right=parsed.get("clearance_right", 0.4),
+                is_emergency=parsed.get("emergency_stop", False)
+            )
+
         if accessibility_context:
             parsed["accessibility_context"] = accessibility_context
         return parsed
