@@ -13,6 +13,7 @@ if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
 from backend.nebius_client import analyze_spatial_frame, get_api_key
+from backend.tavily_search import fetch_accessibility_context
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(
@@ -54,6 +55,8 @@ if "inference_result" not in st.session_state:
     st.session_state["inference_result"] = None
 if "last_scenario" not in st.session_state:
     st.session_state["last_scenario"] = None
+if "cached_accessibility" not in st.session_state:
+    st.session_state["cached_accessibility"] = fetch_accessibility_context()
 
 # --- Sidebar Controls ---
 st.sidebar.header("🕹️ Vehicle & Intent Controls")
@@ -75,6 +78,17 @@ with st.sidebar.expander("☁️ Nebius AI Cloud Settings", expanded=False):
         "Nebius Model:",
         ["nvidia/nemotron-3-ultra", "nvidia/cosmos-nemotron-34b", "meta-llama/Llama-3.3-70B-Instruct"]
     )
+
+with st.sidebar.expander("🌐 Tavily Accessibility Search", expanded=False):
+    tavily_query = st.text_input(
+        "Accessibility Query:",
+        value="ADA wheelchair doorway minimum clearance",
+        help="Search live accessibility regulations & spatial metrics via Tavily"
+    )
+    if st.button("🔍 Search Standards", use_container_width=True):
+        with st.spinner("Fetching live accessibility context..."):
+            st.session_state["cached_accessibility"] = fetch_accessibility_context(tavily_query)
+            st.rerun()
 
 # Connection Status Badge
 active_key = get_api_key(api_key_input)
@@ -109,7 +123,8 @@ def run_copilot_inference():
         speed_mps=float(speed_input),
         api_key=api_key_input if active_key else None,
         base_url=base_url_input,
-        model=model_choice
+        model=model_choice,
+        accessibility_context=st.session_state.get("cached_accessibility")
     )
 
 # Trigger logic: either explicit button or real-time change
@@ -266,6 +281,11 @@ with col2:
 
         # Spatial summary explanation
         st.info(f"**Copilot Advisory:**\n\n{result.get('spatial_summary', '')}")
+
+        # Accessibility Context
+        if result.get("accessibility_context"):
+            with st.expander("🌐 Accessibility Standards & Context (Tavily)", expanded=False):
+                st.markdown(f"**Retrieved Standards:**\n\n{result['accessibility_context']}")
 
         # Expandable JSON response
         with st.expander("🔍 View Raw Spatial Inference Payload", expanded=False):

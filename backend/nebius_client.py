@@ -17,7 +17,12 @@ def get_api_key(api_key: str | None = None) -> str | None:
         return key.strip()
     return None
 
-def simulate_spatial_inference(user_intent: str, steering_deg: float, speed_mps: float) -> dict:
+def simulate_spatial_inference(
+    user_intent: str,
+    steering_deg: float,
+    speed_mps: float,
+    accessibility_context: str | None = None
+) -> dict:
     """
     Fallback deterministic spatial copilot simulation when Nebius API key is not configured
     or when running offline. Provides mathematically sound trajectory corrections.
@@ -79,7 +84,7 @@ def simulate_spatial_inference(user_intent: str, steering_deg: float, speed_mps:
             f"by {correction:+.1f}° to center trajectory through gateway."
         )
 
-    return {
+    res = {
         "status": "SUCCESS",
         "source": "simulated_copilot_engine",
         "model": "nvidia/nemotron-3-ultra (simulated)",
@@ -93,6 +98,9 @@ def simulate_spatial_inference(user_intent: str, steering_deg: float, speed_mps:
         "emergency_stop": emergency_stop,
         "spatial_summary": summary
     }
+    if accessibility_context:
+        res["accessibility_context"] = accessibility_context
+    return res
 
 def analyze_spatial_frame(
     image_payload: str = "mock_frame_data_001",
@@ -101,7 +109,8 @@ def analyze_spatial_frame(
     speed_mps: float = 0.8,
     api_key: str | None = None,
     base_url: str | None = None,
-    model: str = DEFAULT_MODEL
+    model: str = DEFAULT_MODEL,
+    accessibility_context: str | None = None
 ) -> dict:
     """
     Sends spatial telemetry and frame metadata to NVIDIA Nemotron / Cosmos on Nebius
@@ -113,7 +122,7 @@ def analyze_spatial_frame(
 
     # If no valid API key is available, run simulated spatial engine
     if not active_key:
-        return simulate_spatial_inference(user_intent, steering_deg, speed_mps)
+        return simulate_spatial_inference(user_intent, steering_deg, speed_mps, accessibility_context=accessibility_context)
 
     headers = {
         "Authorization": f"Bearer {active_key}",
@@ -144,6 +153,8 @@ def analyze_spatial_frame(
         f"Target Velocity: {speed_mps} m/s\n"
         f"Visual Frame Metadata: {image_payload}"
     )
+    if accessibility_context:
+        user_prompt += f"\nAccessibility Standards & Context: {accessibility_context}"
 
     payload = {
         "model": model,
@@ -174,11 +185,13 @@ def analyze_spatial_frame(
         parsed["source"] = "nebius_cloud"
         parsed["model"] = model
         parsed["user_intent"] = user_intent
+        if accessibility_context:
+            parsed["accessibility_context"] = accessibility_context
         return parsed
 
     except Exception as e:
         # Fall back to simulated inference with error notice in summary
-        fallback = simulate_spatial_inference(user_intent, steering_deg, speed_mps)
+        fallback = simulate_spatial_inference(user_intent, steering_deg, speed_mps, accessibility_context=accessibility_context)
         fallback["source"] = "simulated_copilot_engine (API fallback)"
         fallback["api_notice"] = f"Nebius API call failed: {str(e)}"
         return fallback
