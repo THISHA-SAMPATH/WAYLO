@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 # Load variables from .env if present
 load_dotenv()
 
-DEFAULT_NEBIUS_BASE_URL = os.getenv("NEBIUS_BASE_URL", "https://api.studio.nebius.com/v1")
-DEFAULT_MODEL = os.getenv("NEBIUS_MODEL", "nvidia/nemotron-3-ultra")
+DEFAULT_NEBIUS_BASE_URL = os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
+DEFAULT_MODEL = os.getenv("NEBIUS_MODEL", "nvidia/Nemotron-3-Ultra-550b-a55b")
 
 def get_api_key(api_key: str | None = None) -> str | None:
     """Retrieves and validates the Nebius API key."""
@@ -131,7 +131,7 @@ def simulate_spatial_inference(
     res = {
         "status": "SUCCESS",
         "source": "simulated_copilot_engine",
-        "model": "nvidia/nemotron-3-ultra (simulated)",
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b (simulated)",
         "user_intent": user_intent,
         "steering_correction_deg": round(correction, 1),
         "arbitration_alpha": alpha,
@@ -147,6 +147,42 @@ def simulate_spatial_inference(
     if accessibility_context:
         res["accessibility_context"] = accessibility_context
     return res
+
+
+def _extract_json(text: str) -> dict:
+    """Parse the model reply; tolerate code fences, <think> blocks and surrounding prose."""
+    clean = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    if clean.startswith("```"):
+        clean = re.sub(r"^```(?:json)?\n?", "", clean)
+        clean = re.sub(r"\n?```$", "", clean)
+    try:
+        return json.loads(clean)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", clean, flags=re.S)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+def sanitize_inference(parsed: dict, fallback: dict) -> dict:
+    """Fill missing fields from the deterministic engine and clamp values to safe ranges."""
+    for key, value in fallback.items():
+        parsed.setdefault(key, value)
+    def num(key, lo, hi, cast=float):
+        try:
+            parsed[key] = cast(min(hi, max(lo, float(parsed[key]))))
+        except (TypeError, ValueError):
+            parsed[key] = fallback[key]
+    num("arbitration_alpha", 0.0, 1.0)
+    num("hazard_risk_score", 0, 100, int)
+    num("clearance_left", 0.0, 5.0)
+    num("clearance_right", 0.0, 5.0)
+    num("time_to_collision_sec", 0.0, 60.0)
+    num("steering_correction_deg", -45.0, 45.0)
+    parsed["emergency_stop"] = bool(parsed.get("emergency_stop", False))
+    if parsed["emergency_stop"]:
+        parsed["arbitration_alpha"] = 1.0
+    return parsed
 
 def analyze_spatial_frame(
     image_payload: str = "mock_frame_data_001",
@@ -218,18 +254,16 @@ def analyze_spatial_frame(
             f"{active_base_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=12
+            timeout=30
         )
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
 
-        # Parse JSON from content (handling possible markdown fences)
-        clean_content = content.strip()
-        if clean_content.startswith("```"):
-            clean_content = re.sub(r"^```(?:json)?\n?", "", clean_content)
-            clean_content = re.sub(r"\n?```$", "", clean_content)
-
-        parsed = json.loads(clean_content)
+        parsed = _extract_json(content)
+        parsed = sanitize_inference(
+            parsed,
+            simulate_spatial_inference(user_intent, steering_deg, speed_mps),
+        )
         parsed["source"] = "nebius_cloud"
         parsed["model"] = model
         parsed["user_intent"] = user_intent

@@ -22,6 +22,7 @@ from .nebius_client import (
     DEFAULT_NEBIUS_BASE_URL
 )
 from .tavily_search import fetch_accessibility_context, get_standard_specs
+from . import core, perception, simulation
 
 # Load environment configuration
 load_dotenv()
@@ -42,8 +43,8 @@ app = FastAPI(
 # Enable CORS for frontend visualizers (Streamlit, MATLAB, React, WebGL)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=os.getenv("WAYLO_CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(","),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -60,6 +61,11 @@ class SpatialInferenceRequest(BaseModel):
     user_intent: str = Field(
         default="Align with Doorway",
         description="Target intent: 'Align with Doorway', 'Navigate Tight Corridor', 'Dock at Table', 'Emergency Stop Test'"
+    )
+    lidar_pose: Optional[dict] = Field(
+        default=None,
+        description="Optional simulated LiDAR pose {x, y, heading_deg, door_width_m}. When given, the ray-cast scan "
+                    "summary (ranges, detected opening) is added to the model prompt as real sensor context."
     )
     steering_angle_deg: float = Field(
         default=0.0,
@@ -146,6 +152,10 @@ class KinematicsBlendRequest(BaseModel):
     max_accel_mps2: float = Field(
         default=2.0,
         description="Maximum braking deceleration in m/s^2"
+    )
+    obstacle_distance_m: Optional[float] = Field(
+        default=None,
+        description="Measured distance to the nearest obstacle ahead (m). Triggers AEB when within stopping distance."
     )
 
 class KinematicsBlendResponse(BaseModel):
@@ -250,9 +260,17 @@ def analyze_spatial_telemetry(payload: SpatialInferenceRequest):
         query = payload.accessibility_query or f"wheelchair standard for {payload.user_intent}"
         access_context = fetch_accessibility_context(query)
 
+    frame_text = payload.frame_metadata
+    if payload.lidar_pose:
+        lp = payload.lidar_pose
+        room = perception.build_room(float(lp.get("door_width_m", 1.4)))
+        scan = perception.lidar_scan(room, float(lp.get("x", 0.0)), float(lp.get("y", 0.5)),
+                                     math.radians(float(lp.get("heading_deg", 0.0))))
+        frame_text = f"{frame_text}. {perception.scan_summary_text(scan, perception.detect_gap(scan, float(lp.get('y', 0.5))))}"
+
     # Perform perception inference
     raw_result = analyze_spatial_frame(
-        image_payload=payload.frame_metadata,
+        image_payload=frame_text,
         user_intent=payload.user_intent,
         steering_deg=payload.steering_angle_deg,
         speed_mps=payload.velocity_mps,
@@ -264,6 +282,13 @@ def analyze_spatial_telemetry(payload: SpatialInferenceRequest):
         raw_result["clearance_left"] = round(payload.left_sensor_dist, 2)
     if payload.right_sensor_dist is not None:
         raw_result["clearance_right"] = round(payload.right_sensor_dist, 2)
+    if payload.left_sensor_dist is not None or payload.right_sensor_dist is not None:
+        # Measured distances must drive arbitration too, not only the displayed numbers.
+        min_clear = min(raw_result["clearance_left"], raw_result["clearance_right"])
+        raw_result["arbitration_alpha"] = round(max(
+            float(raw_result.get("arbitration_alpha", 0.0)),
+            core.compute_alpha(float(raw_result.get("hazard_risk_score", 0)), min_clear,
+                               bool(raw_result.get("emergency_stop", False)))), 3)
 
     return SpatialInferenceResponse(**raw_result)
 
@@ -294,7 +319,8 @@ def blend_kinematics(req: KinematicsBlendRequest):
     blended_steering_deg = req.user_steering_deg + (alpha * req.copilot_correction_deg)
 
     # Emergency stop condition
-    is_emergency = (blended_v <= 0.001) or (copilot_vel <= 0.001 and alpha > 0.8)
+    is_emergency = (blended_v <= 0.001) or (copilot_vel <= 0.001 and alpha > 0.8) or \
+        core.aeb_required(blended_v, req.obstacle_distance_m, a_max=req.max_accel_mps2)
     if is_emergency:
         blended_v = 0.0
 
@@ -317,7 +343,7 @@ def blend_kinematics(req: KinematicsBlendRequest):
     w_l = v_l / req.wheel_radius_m
 
     # Braking distance d = v^2 / (2 * a_max)
-    stopping_dist = (blended_v ** 2) / (2.0 * max(0.5, req.max_accel_mps2))
+    stopping_dist = core.stopping_distance(blended_v, a_max=req.max_accel_mps2)
 
     return KinematicsBlendResponse(
         blended_linear_vel_mps=round(blended_v, 3),
@@ -347,6 +373,51 @@ def search_accessibility_standards(req: AccessibilitySearchRequest):
         standards_context=context,
         standard_specs=specs
     )
+
+
+# ------------------------------------------------------------------------------
+# Closed-loop simulation and simulated LiDAR perception
+# ------------------------------------------------------------------------------
+class ClosedLoopRequest(BaseModel):
+    drift_deg: float = Field(default=14.0, ge=-45, le=45, description="Driver heading drift (degrees)")
+    speed_mps: float = Field(default=0.85, gt=0.1, le=1.8)
+    door_width_m: float = Field(default=1.4, ge=0.80, le=2.0, description="Clear door opening (ADA minimum 0.815 m)")
+    tremor_deg: float = Field(default=2.0, ge=0, le=8, description="Hand-tremor amplitude (degrees)")
+    duration_s: float = Field(default=9.0, gt=1, le=20)
+
+
+class ScanRequest(BaseModel):
+    x: float = 0.0
+    y: float = 0.5
+    heading_deg: float = 0.0
+    door_width_m: float = 1.4
+
+
+def _downsample(sim: dict, step: int = 5) -> dict:
+    out = {k: [round(float(x), 3) for x in v[::step]] for k, v in sim.items() if k != "summary"}
+    out["summary"] = sim["summary"]
+    return out
+
+
+@app.post("/api/simulate/closed-loop", summary="Unassisted vs WAYLO closed-loop doorway run", tags=["Simulation"])
+def simulate_closed_loop(req: ClosedLoopRequest):
+    """Runs the same driver input twice (no assist, then WAYLO) through a simulated LiDAR doorway."""
+    res = simulation.compare(**req.model_dump())
+    return {"params": req.model_dump(),
+            "unassisted": _downsample(res["unassisted"]),
+            "waylo": _downsample(res["waylo"])}
+
+
+@app.post("/api/perception/scan", summary="Simulated 2D LiDAR scan and doorway detection", tags=["Perception"])
+def perception_scan(req: ScanRequest):
+    room = perception.build_room(req.door_width_m)
+    scan = perception.lidar_scan(room, req.x, req.y, math.radians(req.heading_deg))
+    gap = perception.detect_gap(scan, req.y)
+    left, right = perception.side_clearances(scan)
+    return {"ranges_m": [round(float(r), 3) for r in scan["ranges"]],
+            "front_range_m": round(perception.front_range(scan), 3),
+            "side_clearance_left_m": round(left, 3), "side_clearance_right_m": round(right, 3),
+            "doorway": gap, "summary_text": perception.scan_summary_text(scan, gap)}
 
 @app.get("/api/scenarios", summary="Predefined Indoor Physical Scenarios", tags=["Scenarios"])
 def get_indoor_scenarios():
@@ -440,7 +511,7 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("WAYLO_HOST", "0.0.0.0")
+    host = os.getenv("WAYLO_HOST", "127.0.0.1")
     port = int(os.getenv("WAYLO_PORT", "8000"))
     print(f"🚀 Starting WAYLO FastAPI Server on http://{host}:{port}")
     uvicorn.run("backend.main:app", host=host, port=port, reload=True)
