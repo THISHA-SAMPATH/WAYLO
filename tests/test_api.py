@@ -1,0 +1,66 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from backend.main import app
+
+client = TestClient(app)
+
+
+def test_health():
+    assert client.get("/health").json()["status"] == "HEALTHY"
+
+
+def test_spatial_analyze_offline_defaults():
+    r = client.post("/api/spatial/analyze", json={"user_intent": "Align with Doorway", "steering_angle_deg": 14}).json()
+    assert 0 <= r["arbitration_alpha"] <= 1
+    assert r["clearance_left"] > 0
+
+
+def test_measured_sensor_distances_drive_alpha():
+    base = client.post("/api/spatial/analyze", json={"user_intent": "Align with Doorway", "steering_angle_deg": 2}).json()
+    tight = client.post("/api/spatial/analyze", json={"user_intent": "Align with Doorway", "steering_angle_deg": 2,
+                                                       "left_sensor_dist": 0.05, "right_sensor_dist": 0.6}).json()
+    assert tight["arbitration_alpha"] > base["arbitration_alpha"]
+
+
+def test_blend_matches_equations():
+    r = client.post("/api/kinematics/blend", json={"user_linear_vel": 0.8, "copilot_linear_vel": 0.4,
+                                                    "arbitration_alpha": 0.5}).json()
+    assert r["blended_linear_vel_mps"] == pytest.approx(0.6)
+
+
+def test_blend_aeb_from_measured_obstacle():
+    r = client.post("/api/kinematics/blend", json={"user_linear_vel": 0.9, "obstacle_distance_m": 0.3}).json()
+    assert r["is_emergency_stop"] and r["blended_linear_vel_mps"] == 0.0
+
+
+def test_closed_loop_endpoint():
+    r = client.post("/api/simulate/closed-loop", json={"drift_deg": 14}).json()
+    assert r["unassisted"]["summary"]["collision"] and r["waylo"]["summary"]["passed_door"]
+
+
+def test_perception_scan_endpoint():
+    r = client.post("/api/perception/scan", json={"x": 0.0, "y": 1.5}).json()
+    assert len(r["ranges_m"]) == 61 and r["doorway"] is not None
+
+
+def test_invalid_request_is_rejected():
+    assert client.post("/api/simulate/closed-loop", json={"door_width_m": 0.2}).status_code == 422
+
+
+def test_cors_rejects_unknown_origin():
+    r = client.options("/health", headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "GET"})
+    assert r.headers.get("access-control-allow-origin") is None
+
+
+def test_lidar_scan_summary_reaches_the_model_prompt(monkeypatch):
+    import backend.main as m
+    seen = {}
+
+    def fake(**kw):
+        seen.update(kw)
+        return m.simulate_spatial_inference(kw["user_intent"], kw["steering_deg"], kw["speed_mps"])
+    monkeypatch.setattr(m, "analyze_spatial_frame", fake)
+    r = client.post("/api/spatial/analyze", json={"lidar_pose": {"x": 0.3, "y": 2.0, "heading_deg": 5}})
+    assert r.status_code == 200
+    assert "2D LiDAR" in seen["image_payload"] and "Opening detected" in seen["image_payload"]
