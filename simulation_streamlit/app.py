@@ -163,11 +163,11 @@ with st.sidebar.expander("☁️ Nebius AI Cloud Credentials", expanded=False):
     )
     base_url_input = st.text_input(
         "Nebius Base URL:",
-        value=os.getenv("NEBIUS_BASE_URL", "https://api.studio.nebius.com/v1")
+        value=os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
     )
     model_choice = st.selectbox(
         "NVIDIA Model on Nebius:",
-        ["nvidia/nemotron-3-ultra", "nvidia/cosmos-nemotron-34b", "meta-llama/Llama-3.3-70B-Instruct"]
+        ["nvidia/Nemotron-3-Ultra-550b-a55b", "nvidia/nemotron-3-super-120b-a12b", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", "nvidia/Cosmos3-Super-Reasoner"]
     )
 
 # Connection Status Indicator
@@ -250,11 +250,12 @@ if should_execute:
 result = st.session_state.get("inference_result")
 
 # --- Tabs Structure ---
-tab_cockpit, tab_kinematics, tab_tavily, tab_api = st.tabs([
+tab_cockpit, tab_kinematics, tab_tavily, tab_api, tab_closed = st.tabs([
     "🎮 Shared-Autonomy Cockpit",
     "🔬 Differential Kinematics & Alpha Blending",
     "🌐 Tavily ADA & ISO Standards",
-    "⚡ API Telemetry & Nebius Inspector"
+    "⚡ API Telemetry & Nebius Inspector",
+    "🚪 Closed-Loop Doorway Run"
 ])
 
 # ==============================================================================
@@ -428,7 +429,7 @@ with tab_cockpit:
             # Model & Source Badge
             src = result.get("source", "simulated")
             src_str = "🟢 Nebius AI Cloud (Live Token Factory)" if "nebius" in src else "🟡 Deterministic Physical Sim Engine"
-            st.caption(f"**Source:** {src_str} | **Model:** `{result.get('model', 'nvidia/nemotron-3-ultra')}`")
+            st.caption(f"**Source:** {src_str} | **Model:** `{result.get('model', 'nvidia/Nemotron-3-Ultra-550b-a55b')}`")
 
         else:
             st.info("Click '⚡ Run Spatial Inference' or adjust controls to compute copilot vectors.")
@@ -575,3 +576,11 @@ with tab_api:
             st.json(result)
         else:
             st.info("No inference payload generated yet.")
+
+# ==============================================================================
+# TAB 5: CLOSED-LOOP DOORWAY RUN (simulated LiDAR, unassisted vs WAYLO)
+# ==============================================================================
+with tab_closed:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from closed_loop_tab import render_closed_loop
+    render_closed_loop(default_drift=manual_steering_deg, default_speed=speed_input)
