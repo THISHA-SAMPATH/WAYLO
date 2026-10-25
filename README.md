@@ -3,12 +3,77 @@
 > *Submitted to the NVIDIA x Nebius Global AI Hackathon — Physical AI Track*  
 > Powered by **NVIDIA Nemotron-3-Ultra / Cosmos** on **Nebius AI Cloud** & **Tavily Search API**
 
-[![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron--3--Ultra-76B900?logo=nvidia&logoColor=white)](https://studio.nebius.ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron--3--Ultra-76B900?logo=nvidia&logoColor=white)](https://tokenfactory.nebius.com)
 [![Nebius AI Cloud](https://img.shields.io/badge/Nebius_AI-Token_Factory-00D4FF?logo=cloud&logoColor=white)](https://tokenfactory.nebius.com)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](http://localhost:8000/docs)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.37+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![MATLAB Simulink](https://img.shields.io/badge/MATLAB-3D_World_Kinematics-ED8B00?logo=mathworks&logoColor=white)](https://mathworks.com)
 [![Tavily Search](https://img.shields.io/badge/Tavily-Live_Accessibility_Search-4F46E5)](https://tavily.com)
+
+---
+
+## 🏁 Hackathon Submission at a Glance
+
+| | |
+|:---|:---|
+| **Track** | Physical AI |
+| **Models** | NVIDIA **Nemotron-3-Ultra** (`nvidia/Nemotron-3-Ultra-550b-a55b`); Super, Nano and Cosmos3 Reasoner selectable in the dashboard |
+| **Inference platform** | **Nebius Token Factory** (OpenAI-compatible endpoint, `https://api.tokenfactory.nebius.com/v1`) |
+| **Other services** | Tavily Search API (ADA / ISO 7176 standards) |
+| **License** | [MIT](LICENSE) |
+| **Demo video** | `<paste your public YouTube URL here>` |
+| **Full write-up** | [SUBMISSION.md](SUBMISSION.md) · [Demo video script](docs/DEMO_VIDEO_SCRIPT.md) |
+
+### How WAYLO uses NVIDIA Nemotron on Nebius Token Factory
+
+1. **Situation in.** For every control tick the backend sends Nemotron the user's intent (doorway, corridor, table, emergency), joystick steering angle, target speed, and, optionally, ADA clearance text retrieved by Tavily.
+2. **Structured judgement out.** Nemotron returns one JSON object: side clearances, a 0 to 100 hazard score, a steering correction, a recommended speed and a one-sentence explanation shown in the cockpit.
+3. **Safety layer.** `sanitize_inference()` fills any missing field and clamps every value (α in [0, 1], risk in [0, 100], and so on) before the result can reach the blending equations.
+4. **Shared-autonomy blend.** `v_final = (1-α)·v_user + α·v_copilot` is converted to left and right wheel speeds by differential-drive kinematics.
+5. **Graceful degradation.** With no key, or if the cloud call fails, a deterministic physics engine answers instead, so the demo never breaks.
+
+Token Factory is used through its OpenAI-compatible `/chat/completions` and `/models` routes with a plain HTTPS call, so no extra SDK is required. Run `python scripts/verify_nebius.py` to list the NVIDIA models your key can use and to measure live latency.
+
+> **Scope note.** Nemotron reasons over a text description of the scene: intent, steering, speed, standards and, in simulation, a summary of a ray-cast LiDAR scan. Connecting real LiDAR or depth hardware is the next step. The real-time control loop (50 Hz) is deterministic; the cloud model is advisory.
+
+### Run in 60 seconds
+
+```bash
+git clone https://github.com/<your-username>/WAYLO.git && cd WAYLO
+python -m venv venv && source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env                                   # optional: add NEBIUS_API_KEY and TAVILY_API_KEY
+python scripts/verify_nebius.py                        # optional: confirm Nebius + Nemotron are reachable
+python run.py                                          # API on :8000, guided dashboard on :8501
+```
+
+---
+
+## 🧪 Validated Closed-Loop Benchmark (Python)
+
+The `🚪 Closed-Loop Doorway Run` tab and `POST /api/simulate/closed-loop` run the **same driver input twice** through a simulated room: once with no assistance and once with WAYLO. The driver holds a heading offset ("drift") with a little hand tremor. WAYLO sees the world only through a **ray-cast 2D LiDAR** (61 rays, 180°): it finds the doorway *from the scan*, estimates risk and clearance, raises its authority α smoothly, steers toward the gap centre and brakes from the *measured* range (autonomous emergency braking, `d_stop = v·t_react + v²/2a + margin`).
+
+| Drift | Door | No assist (min edge clearance) | WAYLO (min edge clearance) | Peak α | Offset at door |
+|:---:|:---:|:---|:---|:---:|:---:|
+| 5° | 1.4 m | Passed (+0.04 m) | Passed (+0.28 m) | 0.77 | +0.08 m |
+| 14° | 1.4 m | **Collision at 4.2 s** (-0.10 m) | Passed (+0.25 m) | 0.92 | +0.10 m |
+| 30° | 1.4 m | **Collision at 4.6 s** (-1.04 m) | Passed (+0.23 m) | 0.94 | +0.12 m |
+| 10° | 1.1 m | **Collision at 4.2 s** (-0.20 m) | Passed (+0.12 m) | 0.88 | +0.10 m |
+| 10° | 0.9 m | **Collision at 4.2 s** (-0.15 m) | Passed (+0.03 m) | 0.86 | +0.07 m |
+
+Across a sweep of 39 cases (drift −30° to +30°, doors 0.9, 1.1 and 1.4 m, 2° tremor), WAYLO passed all 39 and the unassisted chair collided in 34. These numbers come from the included simulator and are reproducible with `pytest -q`. A 0.9 m door leaves only a few centimetres of margin for a 0.65 m chair, so the narrowest cases are tight by nature.
+
+**Perception, safety and quality additions**
+
+- `backend/perception.py`: ray-cast LiDAR, doorway detection from the scan, range-based side clearances. The scan summary can be sent to Nemotron as real sensor context (`lidar_pose` on `/api/spatial/analyze`).
+- `backend/core.py`: one shared module for constants, α, blending, wheel speeds and braking distance.
+- Measured side distances now also update α and risk (previously they changed only the displayed numbers).
+- Model replies are validated and clamped before they can influence motion (`sanitize_inference`).
+- CORS is limited to the dashboard origin and the server binds to `127.0.0.1` by default (`WAYLO_HOST` and `WAYLO_CORS_ORIGINS` to change).
+- 37 automated tests and a GitHub Actions workflow: `pip install -r requirements-dev.txt && pytest -q`.
+
+> **About the MATLAB scripts.** They are illustrative visualisations. The validated benchmark is the Python simulator above, because the MATLAB scripts model a constant steering command, which traces a circle rather than a drifting heading.
 
 ---
 
@@ -46,8 +111,8 @@ Existing automated solutions either:
                                      +--------------------------------+         |
                                      |        NEBIUS AI CLOUD         |         |
                                      |    (Nebius Token Factory)      |         |
-                                     |    - nvidia/nemotron-3-ultra   |         |
-                                     |    - nvidia/cosmos-nemotron-34b|         |
+                                     |    - nvidia/Nemotron-3-Ultra-550b-a55b   |         |
+                                     |    - nvidia/Cosmos3-Super-Reasoner|         |
                                      +----------------+---------------+         |
                                                       |                         |
                                                       v                         |
@@ -159,8 +224,8 @@ cp .env.example .env
 Edit `.env` with your Nebius AI Cloud and Tavily credentials:
 ```ini
 NEBIUS_API_KEY=your_nebius_api_key_here
-NEBIUS_BASE_URL=https://api.studio.nebius.com/v1
-NEBIUS_MODEL=nvidia/nemotron-3-ultra
+NEBIUS_BASE_URL=https://api.tokenfactory.nebius.com/v1
+NEBIUS_MODEL=nvidia/Nemotron-3-Ultra-550b-a55b
 TAVILY_API_KEY=your_tavily_api_key_here
 WAYLO_HOST=0.0.0.0
 WAYLO_PORT=8000
@@ -231,7 +296,7 @@ curl -X POST "http://localhost:8000/api/spatial/analyze" \
 {
   "status": "SUCCESS",
   "source": "nebius_cloud",
-  "model": "nvidia/nemotron-3-ultra",
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
   "user_intent": "Align with Doorway",
   "steering_correction_deg": -14.0,
   "arbitration_alpha": 0.68,
