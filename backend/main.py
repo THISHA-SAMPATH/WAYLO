@@ -25,23 +25,27 @@ try:
     from .nebius_client import (
         analyze_spatial_frame,
         simulate_spatial_inference,
+        solve_arm_manipulation,
         get_api_key,
         compute_shared_autonomy_arbitration,
         DEFAULT_MODEL,
         DEFAULT_NEBIUS_BASE_URL
     )
     from .tavily_search import fetch_accessibility_context, get_standard_specs
+    from .privacy_scrubber import anonymize_spatial_feed
     from . import core, perception, simulation
 except (ImportError, ValueError):
     from backend.nebius_client import (
         analyze_spatial_frame,
         simulate_spatial_inference,
+        solve_arm_manipulation,
         get_api_key,
         compute_shared_autonomy_arbitration,
         DEFAULT_MODEL,
         DEFAULT_NEBIUS_BASE_URL
     )
     from backend.tavily_search import fetch_accessibility_context, get_standard_specs
+    from backend.privacy_scrubber import anonymize_spatial_feed
     from backend import core, perception, simulation
 
 
@@ -249,6 +253,24 @@ class CopilotStepRequest(BaseModel):
         description="Current wheelchair Y coordinate in meters"
     )
 
+class ArmManipulationRequest(BaseModel):
+    intent: str = Field(
+        default="GRASP_WATER_BOTTLE",
+        description="Target assistive manipulation task (e.g. GRASP_WATER_BOTTLE, PRESS_ELEVATOR_BUTTON)"
+    )
+    anonymize_privacy: bool = Field(
+        default=True,
+        description="Enforce privacy-scrubbing to strip RGB color data and convert to 3D point cloud"
+    )
+    raw_frame_data: Optional[str] = Field(
+        default="mock_rgbd_frame_arm_camera_001",
+        description="Optional raw camera frame identifier or bytes token"
+    )
+    depth_matrix: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional pre-scrubbed depth point-cloud matrix"
+    )
+
 # ==============================================================================
 # API Endpoints
 # ==============================================================================
@@ -267,6 +289,7 @@ def root_overview():
         "endpoints": {
             "health": "/health",
             "copilot_step": "/api/v1/copilot-step",
+            "arm_manipulation": "/api/v1/arm-manipulation",
             "spatial_analyze": "/api/spatial/analyze",
             "kinematics_blend": "/api/kinematics/blend",
             "accessibility_search": "/api/accessibility/search",
@@ -372,6 +395,49 @@ def copilot_step(req: CopilotStepRequest):
         "hazard_risk_score": inference.get("hazard_risk_score", 10),
         "spatial_summary": inference.get("spatial_summary", ""),
         "inference_source": inference.get("source", "copilot_engine")
+    }
+
+@app.post(
+    "/api/v1/arm-manipulation",
+    summary="6-DOF Assistive Robotic Arm Manipulation",
+    tags=["Manipulation"]
+)
+def arm_manipulation_step(req: ArmManipulationRequest):
+    """
+    Processes 6-DOF robotic arm manipulation requests:
+    1. If anonymize_privacy is True, strips RGB metadata via privacy_scrubber.
+    2. Queries NVIDIA Nemotron on Nebius Token Factory for 6-DOF joint angles and end-effector state.
+    3. Returns joint trajectories and execution status.
+    """
+    scrubbed_feed = None
+    if req.anonymize_privacy:
+        scrubbed_feed = anonymize_spatial_feed(req.raw_frame_data or "arm_raw_rgbd_token")
+        spatial_data = scrubbed_feed
+    else:
+        spatial_data = req.depth_matrix
+
+    arm_res = solve_arm_manipulation(
+        target_intent=req.intent,
+        spatial_depth_matrix=spatial_data
+    )
+
+    joint_angles = arm_res.get("joint_angles_deg", [0.0, 30.0, -20.0, 0.0, 45.0, 0.0])
+    end_effector = arm_res.get("end_effector_status", "OPEN")
+
+    return {
+        "status": "SUCCESS",
+        "intent": req.intent,
+        "execution_status": "READY",
+        "privacy_scrubbed": bool(req.anonymize_privacy),
+        "anonymization_method": scrubbed_feed.get("anonymization_method") if scrubbed_feed else "NONE",
+        "joint_angles_deg": joint_angles,
+        "end_effector_status": end_effector,
+        "joint_trajectories": {
+            f"joint_{i+1}_deg": joint_angles[i] for i in range(len(joint_angles))
+        },
+        "trajectory_duration_sec": arm_res.get("trajectory_duration_sec", 2.5),
+        "manipulation_summary": arm_res.get("manipulation_summary", ""),
+        "source": arm_res.get("source", "arm_kinematics_engine")
     }
 
 @app.post(

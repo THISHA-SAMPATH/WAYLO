@@ -99,3 +99,32 @@ def test_matlab_telemetry_endpoint():
     assert "blended_linear_vel" in data
     assert "left_wheel_speed" in data
 
+
+def test_arm_manipulation_endpoint():
+    payload = {
+        "intent": "GRASP_WATER_BOTTLE",
+        "anonymize_privacy": True
+    }
+    r = client.post("/api/v1/arm-manipulation", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert data["privacy_scrubbed"] is True
+    assert len(data["joint_angles_deg"]) == 6
+    assert data["end_effector_status"] in ("OPEN", "CLOSE")
+    assert "joint_trajectories" in data
+
+
+def test_arm_manipulation_button_press():
+    payload = {
+        "intent": "PRESS_ELEVATOR_BUTTON",
+        "anonymize_privacy": False
+    }
+    r = client.post("/api/v1/arm-manipulation", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert data["privacy_scrubbed"] is False
+    assert len(data["joint_angles_deg"]) == 6
+
+
