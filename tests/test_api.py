@@ -64,3 +64,38 @@ def test_lidar_scan_summary_reaches_the_model_prompt(monkeypatch):
     r = client.post("/api/spatial/analyze", json={"lidar_pose": {"x": 0.3, "y": 2.0, "heading_deg": 5}})
     assert r.status_code == 200
     assert "2D LiDAR" in seen["image_payload"] and "Opening detected" in seen["image_payload"]
+
+
+def test_copilot_step_endpoint():
+    payload = {
+        "user_intent": "align_doorway",
+        "manual_steering_deg": 10.0,
+        "speed_input": 0.8,
+        "current_pose_x": 0.1,
+        "current_pose_y": 1.2
+    }
+    r = client.post("/api/v1/copilot-step", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert "final_angle" in data
+    assert "arbitration_alpha" in data
+    assert 0.0 <= data["alpha"] <= 1.0
+
+
+def test_matlab_telemetry_endpoint():
+    payload = {
+        "x": 0.2,
+        "y": 1.5,
+        "theta_rad": 0.05,
+        "linear_velocity": 0.7,
+        "user_steering_deg": 5.0,
+        "scenario": "Doorway"
+    }
+    r = client.post("/api/matlab/telemetry", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ACK"
+    assert "blended_linear_vel" in data
+    assert "left_wheel_speed" in data
+

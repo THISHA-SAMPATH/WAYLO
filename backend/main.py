@@ -1,5 +1,5 @@
 """
-WAYLO: Shared-Autonomy Mobility Copilot REST API
+WAYLO Shared-Autonomy Middleware API
 FastAPI Middleware connecting Electric Wheelchair Kinematics, MATLAB 3D World,
 NVIDIA Nemotron / Cosmos on Nebius AI Cloud, and Tavily Accessibility Search.
 """
@@ -13,23 +13,44 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from .nebius_client import (
-    analyze_spatial_frame,
-    simulate_spatial_inference,
-    get_api_key,
-    compute_shared_autonomy_arbitration,
-    DEFAULT_MODEL,
-    DEFAULT_NEBIUS_BASE_URL
-)
-from .tavily_search import fetch_accessibility_context, get_standard_specs
-from . import core, perception, simulation
+import sys
+from pathlib import Path
+
+# Add project root to sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from .nebius_client import (
+        analyze_spatial_frame,
+        simulate_spatial_inference,
+        get_api_key,
+        compute_shared_autonomy_arbitration,
+        DEFAULT_MODEL,
+        DEFAULT_NEBIUS_BASE_URL
+    )
+    from .tavily_search import fetch_accessibility_context, get_standard_specs
+    from . import core, perception, simulation
+except (ImportError, ValueError):
+    from backend.nebius_client import (
+        analyze_spatial_frame,
+        simulate_spatial_inference,
+        get_api_key,
+        compute_shared_autonomy_arbitration,
+        DEFAULT_MODEL,
+        DEFAULT_NEBIUS_BASE_URL
+    )
+    from backend.tavily_search import fetch_accessibility_context, get_standard_specs
+    from backend import core, perception, simulation
+
 
 # Load environment configuration
 load_dotenv()
 
 # Initialize FastAPI Application
 app = FastAPI(
-    title="WAYLO: Shared-Autonomy Mobility Copilot API",
+    title="WAYLO Shared-Autonomy Middleware API",
     description=(
         "Physical AI middleware for power wheelchairs competing in the NVIDIA x Nebius Global AI Hackathon. "
         "Provides real-time spatial vision inferences, differential-drive kinematic arbitration, "
@@ -40,11 +61,24 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Enable CORS for frontend visualizers (Streamlit, MATLAB, React, WebGL)
+# Enable CORS for local origins (Streamlit, MATLAB, local frontends)
+local_origins = [
+    "http://localhost",
+    "http://localhost:8501",
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8501",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:3000",
+]
+env_origins = [o.strip() for o in os.getenv("WAYLO_CORS_ORIGINS", "").split(",") if o.strip()]
+cors_origins = list(dict.fromkeys(local_origins + env_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("WAYLO_CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(","),
-    allow_credentials=False,
+    allow_origins=cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -183,14 +217,37 @@ class AccessibilitySearchResponse(BaseModel):
 
 class MatlabTelemetryPacket(BaseModel):
     timestamp: float = Field(default_factory=time.time)
-    x: float
-    y: float
-    theta_rad: float
-    linear_velocity: float
-    user_steering_deg: float
-    left_clearance: float
-    right_clearance: float
-    scenario: str = "Doorway"
+    x: float = Field(default=0.0, description="X coordinate (m)")
+    y: float = Field(default=0.0, description="Y coordinate (m)")
+    z: Optional[float] = Field(default=0.0, description="Optional Z coordinate (m)")
+    theta_rad: float = Field(default=0.0, description="Heading angle in radians")
+    linear_velocity: float = Field(default=0.8, description="Linear velocity (m/s)")
+    user_steering_deg: float = Field(default=0.0, description="User steering angle (deg)")
+    left_clearance: Optional[float] = Field(default=0.4, description="Left clearance (m)")
+    right_clearance: Optional[float] = Field(default=0.4, description="Right clearance (m)")
+    scenario: Optional[str] = Field(default="Doorway", description="Scenario identifier")
+
+class CopilotStepRequest(BaseModel):
+    user_intent: str = Field(
+        default="align_doorway",
+        description="User navigational intent (e.g. align_doorway, navigate_corridor)"
+    )
+    manual_steering_deg: float = Field(
+        default=0.0,
+        description="Manual steering angle command in degrees"
+    )
+    speed_input: float = Field(
+        default=0.8,
+        description="Desired forward velocity in m/s"
+    )
+    current_pose_x: float = Field(
+        default=0.0,
+        description="Current wheelchair X coordinate in meters"
+    )
+    current_pose_y: float = Field(
+        default=0.0,
+        description="Current wheelchair Y coordinate in meters"
+    )
 
 # ==============================================================================
 # API Endpoints
@@ -209,6 +266,7 @@ def root_overview():
         "default_model": DEFAULT_MODEL,
         "endpoints": {
             "health": "/health",
+            "copilot_step": "/api/v1/copilot-step",
             "spatial_analyze": "/api/spatial/analyze",
             "kinematics_blend": "/api/kinematics/blend",
             "accessibility_search": "/api/accessibility/search",
@@ -223,7 +281,7 @@ def healthcheck():
     """Verifies backend operational status and Nebius / Tavily integrations."""
     nebius_key = get_api_key()
     tavily_key = os.getenv("TAVILY_API_KEY")
-    has_tavily = bool(tavily_key and tavily_key != "your_tavily_api_key_here")
+    has_tavily = bool(tavily_key and tavily_key not in ("your_tavily_api_key_here", "tvly-your_tavily_key_here"))
 
     return {
         "status": "HEALTHY",
@@ -245,6 +303,78 @@ def healthcheck():
     }
 
 @app.post(
+    "/api/v1/copilot-step",
+    summary="Shared-Autonomy Single Step Arbitration",
+    tags=["Copilot"]
+)
+def copilot_step(req: CopilotStepRequest):
+    """
+    Step-by-step shared-autonomy arbitration endpoint:
+    - Accepts user_intent, manual_steering_deg, speed_input, current_pose_x, and current_pose_y.
+    - Executes spatial inference via analyze_spatial_frame.
+    - Computes arbitration weight alpha scaling with perceived clearance deficit.
+    - Blends human vs. AI inputs: final_angle = (1 - alpha) * user_angle + alpha * copilot_angle.
+    """
+    user_angle = req.manual_steering_deg
+    user_speed = req.speed_input
+
+    frame_payload = f"pose_x={req.current_pose_x:.2f}_y={req.current_pose_y:.2f}"
+    inference = analyze_spatial_frame(
+        image_payload=frame_payload,
+        user_intent=req.user_intent,
+        steering_deg=user_angle,
+        speed_mps=user_speed
+    )
+
+    left_c = float(inference.get("clearance_left_m", inference.get("clearance_left", 0.42)))
+    right_c = float(inference.get("clearance_right_m", inference.get("clearance_right", 0.38)))
+    min_clearance = min(left_c, right_c)
+
+    min_safe_clearance = 0.40
+    clearance_deficit = max(0.0, min_safe_clearance - min_clearance)
+
+    base_alpha = float(inference.get("arbitration_alpha", 0.0))
+    deficit_alpha = min(1.0, clearance_deficit / min_safe_clearance)
+    alpha = round(max(base_alpha, deficit_alpha), 3)
+
+    is_emergency = bool(inference.get("emergency_stop", False))
+    if is_emergency:
+        alpha = 1.0
+
+    copilot_correction = float(inference.get("steering_correction_deg", 0.0))
+    copilot_angle = user_angle + copilot_correction
+
+    # Shared-autonomy arbitration formula:
+    # final_angle = (1 - alpha) * user_angle + alpha * copilot_angle
+    final_angle = round((1.0 - alpha) * user_angle + alpha * copilot_angle, 2)
+    final_speed = 0.0 if is_emergency else round(min(user_speed, (1.0 - 0.5 * alpha) * user_speed), 2)
+
+    return {
+        "status": "SUCCESS",
+        "user_intent": req.user_intent,
+        "current_pose": {"x": req.current_pose_x, "y": req.current_pose_y},
+        "manual_steering_deg": user_angle,
+        "user_angle": user_angle,
+        "copilot_correction_deg": copilot_correction,
+        "copilot_angle": round(copilot_angle, 2),
+        "arbitration_alpha": alpha,
+        "alpha": alpha,
+        "clearance_deficit": round(clearance_deficit, 3),
+        "final_angle": final_angle,
+        "blended_steering_deg": final_angle,
+        "speed_input": user_speed,
+        "final_speed": final_speed,
+        "clearance_left_m": left_c,
+        "clearance_right_m": right_c,
+        "clearance_left": left_c,
+        "clearance_right": right_c,
+        "emergency_stop": is_emergency,
+        "hazard_risk_score": inference.get("hazard_risk_score", 10),
+        "spatial_summary": inference.get("spatial_summary", ""),
+        "inference_source": inference.get("source", "copilot_engine")
+    }
+
+@app.post(
     "/api/spatial/analyze",
     response_model=SpatialInferenceResponse,
     summary="Perception-to-Trajectory Copilot Inference",
@@ -258,7 +388,8 @@ def analyze_spatial_telemetry(payload: SpatialInferenceRequest):
     access_context = None
     if payload.query_accessibility or payload.accessibility_query:
         query = payload.accessibility_query or f"wheelchair standard for {payload.user_intent}"
-        access_context = fetch_accessibility_context(query)
+        res = fetch_accessibility_context(query)
+        access_context = res.get("formatted_context", str(res)) if isinstance(res, dict) else str(res)
 
     frame_text = payload.frame_metadata
     if payload.lidar_pose:
@@ -268,7 +399,6 @@ def analyze_spatial_telemetry(payload: SpatialInferenceRequest):
                                      math.radians(float(lp.get("heading_deg", 0.0))))
         frame_text = f"{frame_text}. {perception.scan_summary_text(scan, perception.detect_gap(scan, float(lp.get('y', 0.5))))}"
 
-    # Perform perception inference
     raw_result = analyze_spatial_frame(
         image_payload=frame_text,
         user_intent=payload.user_intent,
@@ -277,13 +407,11 @@ def analyze_spatial_telemetry(payload: SpatialInferenceRequest):
         accessibility_context=access_context
     )
 
-    # If explicit physical sensor distances were provided in the request, override or blend them
     if payload.left_sensor_dist is not None:
         raw_result["clearance_left"] = round(payload.left_sensor_dist, 2)
     if payload.right_sensor_dist is not None:
         raw_result["clearance_right"] = round(payload.right_sensor_dist, 2)
     if payload.left_sensor_dist is not None or payload.right_sensor_dist is not None:
-        # Measured distances must drive arbitration too, not only the displayed numbers.
         min_clear = min(raw_result["clearance_left"], raw_result["clearance_right"])
         raw_result["arbitration_alpha"] = round(max(
             float(raw_result.get("arbitration_alpha", 0.0)),
@@ -312,41 +440,28 @@ def blend_kinematics(req: KinematicsBlendRequest):
     alpha = max(0.0, min(1.0, req.arbitration_alpha if req.arbitration_alpha is not None else 0.5))
     copilot_vel = req.copilot_linear_vel if req.copilot_linear_vel is not None else req.user_linear_vel
 
-    # Blended forward linear velocity
-    blended_v = (1.0 - alpha) * req.user_linear_vel + alpha * copilot_vel
+    v = (1.0 - alpha) * req.user_linear_vel + alpha * copilot_vel
+    stopping_dist = (v ** 2) / (2.0 * req.max_accel_mps2)
 
-    # Blended steering angle (degrees)
+    is_emergency = False
+    if req.obstacle_distance_m is not None:
+        if req.obstacle_distance_m <= (stopping_dist + 0.15):
+            is_emergency = True
+            v = 0.0
+            alpha = 1.0
+
     blended_steering_deg = req.user_steering_deg + (alpha * req.copilot_correction_deg)
+    steering_rad = math.radians(blended_steering_deg)
+    omega = (v / req.wheelbase_m) * math.tan(steering_rad) if not is_emergency else 0.0
 
-    # Emergency stop condition
-    is_emergency = (blended_v <= 0.001) or (copilot_vel <= 0.001 and alpha > 0.8) or \
-        core.aeb_required(blended_v, req.obstacle_distance_m, a_max=req.max_accel_mps2)
-    if is_emergency:
-        blended_v = 0.0
+    v_r = v + (omega * req.wheelbase_m / 2.0)
+    v_l = v - (omega * req.wheelbase_m / 2.0)
 
-    # Convert steering angle to yaw rate omega (rad/s)
-    # Using kinematic bicycle/unicycle approximation: omega = (v / L) * tan(delta)
-    rad_steer = math.radians(blended_steering_deg)
-    # Limit max angular rate to +/- 1.5 rad/s for passenger stability
-    omega = max(-1.5, min(1.5, (blended_v / max(0.1, req.wheelbase_m)) * math.tan(rad_steer)))
-    if is_emergency:
-        omega = 0.0
-
-    # Differential drive wheel speeds
-    # v_R = v + (omega * L) / 2
-    # v_L = v - (omega * L) / 2
-    v_r = blended_v + (omega * req.wheelbase_m / 2.0)
-    v_l = blended_v - (omega * req.wheelbase_m / 2.0)
-
-    # Angular wheel speeds (rad/s)
     w_r = v_r / req.wheel_radius_m
     w_l = v_l / req.wheel_radius_m
 
-    # Braking distance d = v^2 / (2 * a_max)
-    stopping_dist = core.stopping_distance(blended_v, a_max=req.max_accel_mps2)
-
     return KinematicsBlendResponse(
-        blended_linear_vel_mps=round(blended_v, 3),
+        blended_linear_vel_mps=round(v, 3),
         blended_angular_vel_rad_s=round(omega, 3),
         blended_steering_deg=round(blended_steering_deg, 2),
         left_wheel_rad_s=round(w_l, 3),
@@ -367,13 +482,13 @@ def blend_kinematics(req: KinematicsBlendRequest):
 def search_accessibility_standards(req: AccessibilitySearchRequest):
     """Queries Tavily API or standards catalog for ADA / ISO 7176 spatial accessibility regulations."""
     context = fetch_accessibility_context(req.query)
+    context_str = context.get("formatted_context", str(context)) if isinstance(context, dict) else str(context)
     specs = get_standard_specs()
     return AccessibilitySearchResponse(
         query=req.query,
-        standards_context=context,
+        standards_context=context_str,
         standard_specs=specs
     )
-
 
 # ------------------------------------------------------------------------------
 # Closed-loop simulation and simulated LiDAR perception
@@ -385,28 +500,26 @@ class ClosedLoopRequest(BaseModel):
     tremor_deg: float = Field(default=2.0, ge=0, le=8, description="Hand-tremor amplitude (degrees)")
     duration_s: float = Field(default=9.0, gt=1, le=20)
 
-
 class ScanRequest(BaseModel):
     x: float = 0.0
     y: float = 0.5
     heading_deg: float = 0.0
     door_width_m: float = 1.4
 
-
 def _downsample(sim: dict, step: int = 5) -> dict:
     out = {k: [round(float(x), 3) for x in v[::step]] for k, v in sim.items() if k != "summary"}
     out["summary"] = sim["summary"]
     return out
 
-
 @app.post("/api/simulate/closed-loop", summary="Unassisted vs WAYLO closed-loop doorway run", tags=["Simulation"])
 def simulate_closed_loop(req: ClosedLoopRequest):
     """Runs the same driver input twice (no assist, then WAYLO) through a simulated LiDAR doorway."""
     res = simulation.compare(**req.model_dump())
-    return {"params": req.model_dump(),
-            "unassisted": _downsample(res["unassisted"]),
-            "waylo": _downsample(res["waylo"])}
-
+    return {
+        "params": req.model_dump(),
+        "unassisted": _downsample(res["unassisted"]),
+        "waylo": _downsample(res["waylo"])
+    }
 
 @app.post("/api/perception/scan", summary="Simulated 2D LiDAR scan and doorway detection", tags=["Perception"])
 def perception_scan(req: ScanRequest):
@@ -414,10 +527,14 @@ def perception_scan(req: ScanRequest):
     scan = perception.lidar_scan(room, req.x, req.y, math.radians(req.heading_deg))
     gap = perception.detect_gap(scan, req.y)
     left, right = perception.side_clearances(scan)
-    return {"ranges_m": [round(float(r), 3) for r in scan["ranges"]],
-            "front_range_m": round(perception.front_range(scan), 3),
-            "side_clearance_left_m": round(left, 3), "side_clearance_right_m": round(right, 3),
-            "doorway": gap, "summary_text": perception.scan_summary_text(scan, gap)}
+    return {
+        "ranges_m": [round(float(r), 3) for r in scan["ranges"]],
+        "front_range_m": round(perception.front_range(scan), 3),
+        "side_clearance_left_m": round(left, 3),
+        "side_clearance_right_m": round(right, 3),
+        "doorway": gap,
+        "summary_text": perception.scan_summary_text(scan, gap)
+    }
 
 @app.get("/api/scenarios", summary="Predefined Indoor Physical Scenarios", tags=["Scenarios"])
 def get_indoor_scenarios():
@@ -468,10 +585,9 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
     Dedicated endpoint optimized for high-frequency polling from MATLAB / Simulink.
     Receives current physical pose (x, y, theta) and computes optimal control corrections.
     """
-    # Run spatial perception
     inference = analyze_spatial_frame(
         image_payload=f"pose_x={packet.x:.2f}_y={packet.y:.2f}_theta={packet.theta_rad:.2f}",
-        user_intent=f"Align with {packet.scenario}",
+        user_intent=f"Align with {packet.scenario or 'Doorway'}",
         steering_deg=packet.user_steering_deg,
         speed_mps=packet.linear_velocity
     )
@@ -480,7 +596,6 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
     correction = inference.get("steering_correction_deg", 0.0)
     is_stop = inference.get("emergency_stop", False)
 
-    # Compute differential drive kinematics
     v_rec = 0.0 if is_stop else packet.linear_velocity
     blended_v = (1.0 - alpha) * packet.linear_velocity + alpha * v_rec
     blended_steer = packet.user_steering_deg + (alpha * correction)
@@ -493,7 +608,7 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
     return {
         "status": "ACK",
         "timestamp": time.time(),
-        "input_pose": {"x": packet.x, "y": packet.y, "theta": packet.theta_rad},
+        "input_pose": {"x": packet.x, "y": packet.y, "z": packet.z, "theta": packet.theta_rad},
         "copilot_correction_deg": correction,
         "arbitration_alpha": alpha,
         "blended_linear_vel": round(blended_v, 3),
@@ -511,7 +626,4 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("WAYLO_HOST", "127.0.0.1")
-    port = int(os.getenv("WAYLO_PORT", "8000"))
-    print(f"🚀 Starting WAYLO FastAPI Server on http://{host}:{port}")
-    uvicorn.run("backend.main:app", host=host, port=port, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
