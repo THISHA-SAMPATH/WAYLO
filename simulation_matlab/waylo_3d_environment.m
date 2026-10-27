@@ -3,11 +3,10 @@
 % NVIDIA x Nebius Global AI Hackathon (Physical AI Track)
 % 
 % Features:
-% - 3D Indoor Room with Doorway (1.4m), Narrow Corridor (1.2m), Workstation Table
-% - Detailed 3D Electric Wheelchair Model (Chassis, Seat, Drive Wheels, Casters, LiDAR)
-% - 3D Sensor Ray-casting & Perception Cone
-% - Comparative Trajectory Animation (Unassisted Collision vs WAYLO Centered Path)
-% - Hardware-in-the-Loop HTTP Hook to WAYLO FastAPI REST Server
+% - 3D Indoor Room (walls, floor grid, 1.2m target doorway lintel)
+% - 3D Differential-Drive Wheelchair Base Model (dual drive wheels, casters, LiDAR)
+% - Front LiDAR Raycast Lines (-30°, 0°, +30°)
+% - Live Hardware-in-the-Loop Telemetry Bridge via webwrite to http://localhost:8000
 % =========================================================================
 
 function waylo_3d_environment()
@@ -15,7 +14,7 @@ function waylo_3d_environment()
 
     fprintf('========================================================\n');
     fprintf('  WAYLO: YOUR WORLD. YOUR WAY.\n');
-    fprintf('  3D Indoor Environment & Shared-Autonomy Visualizer\n');
+    fprintf('  3D Indoor Environment & Spatial Perception Visualizer\n');
     fprintf('  Accelerated with NVIDIA Nemotron / Cosmos on Nebius AI\n');
     fprintf('========================================================\n\n');
 
@@ -24,7 +23,7 @@ function waylo_3d_environment()
                  'Color', [0.07 0.09 0.13], ...
                  'Position', [100, 80, 1100, 750], ...
                  'NumberTitle', 'off');
-    
+
     ax = axes('Parent', fig);
     hold(ax, 'on');
     grid(ax, 'on');
@@ -34,12 +33,12 @@ function waylo_3d_environment()
             'YColor', [0.6 0.65 0.75], ...
             'ZColor', [0.6 0.65 0.75], ...
             'FontSize', 10);
-    
+
     xlabel(ax, 'Lateral X (meters)', 'FontWeight', 'bold');
     ylabel(ax, 'Forward Y (meters)', 'FontWeight', 'bold');
     zlabel(ax, 'Elevation Z (meters)', 'FontWeight', 'bold');
     title(ax, {'\bf\fontsize{14}\color{white}WAYLO: 3D Spatial Environment & Physical Perception', ...
-               '\fontsize{10}\color[rgb]{0.3,0.75,0.95}NVIDIA Nemotron-3-Ultra on Nebius AI Cloud | Differential Drive L=0.60m'}, ...
+               '\fontsize{10}\color[rgb]{0.3,0.75,0.95}NVIDIA Nemotron / Cosmos on Nebius AI Cloud | Differential Drive (L=0.60m, 1.2m Doorway)'}, ...
                'Interpreter', 'tex');
 
     xlim(ax, [-3.5, 3.5]);
@@ -67,20 +66,21 @@ function waylo_3d_environment()
     plot3(ax, x_cor, y_cor, zeros(size(x_cor))+0.03, '-', 'Color', [0.15 0.85 0.45], 'LineWidth', 2.8);
 
     % Legend
-    h_leg = legend(ax, {'', '', '', '', '', '', '', '', '', '', '', ...
-                        'Unassisted Trajectory (Collision Course)', ...
-                        'WAYLO Shared-Autonomy Centered Path'}, ...
-                        'TextColor', 'white', 'Color', [0.12 0.15 0.22], ...
-                        'EdgeColor', [0.3 0.35 0.45], 'Location', 'northeast');
+    legend(ax, {'', '', '', '', '', '', '', '', '', '', '', ...
+                'Unassisted Trajectory (Collision Course)', ...
+                'WAYLO Shared-Autonomy Centered Path'}, ...
+                'TextColor', 'white', 'Color', [0.12 0.15 0.22], ...
+                'EdgeColor', [0.3 0.35 0.45], 'Location', 'northeast');
 
     % --- 3. Telemetry HUD Annotation ---
-    hud_box = annotation('textbox', [0.03, 0.70, 0.30, 0.24], ...
+    hud_box = annotation('textbox', [0.03, 0.70, 0.32, 0.25], ...
                          'String', {'\bfWAYLO COPILOT TELEMETRY', ...
                                     'State: INITIALIZING...', ...
                                     'Pose (X, Y): [0.00, 0.50] m', ...
                                     'Shared-Autonomy \alpha: 0.00', ...
-                                    'Doorway Clearance: 0.40 m', ...
-                                    'Hazard Risk: 12% | AEB: READY'}, ...
+                                    'Doorway Clearance: 0.38 m', ...
+                                    'Hazard Risk: 12% | AEB: READY', ...
+                                    'REST Bridge: http://localhost:8000'}, ...
                          'FitBoxToText', 'off', ...
                          'BackgroundColor', [0.10 0.13 0.20], ...
                          'Color', [0.85 0.90 0.98], ...
@@ -92,6 +92,12 @@ function waylo_3d_environment()
     % Lighting & Camera
     camlight(ax, 'headlight');
     lighting(ax, 'gouraud');
+
+    % Webwrite HTTP options for live telemetry bridge
+    telemetry_url = 'http://localhost:8000/api/matlab/telemetry';
+    web_opts = weboptions('MediaType', 'application/json', ...
+                          'Timeout', 0.2, ...
+                          'RequestMethod', 'post');
 
     % --- 4. Animate Wheelchair Along WAYLO Corrected Path ---
     fprintf('Starting 3D Real-Time Perception Animation...\n');
@@ -118,11 +124,26 @@ function waylo_3d_environment()
             delete(sensor_rays);
         end
 
-        % Draw updated 3D Wheelchair at current pose
+        % Draw updated 3D Wheelchair (dual drive wheels, casters, chassis)
         chair_handles = draw_wheelchair_3d(ax, cur_x, cur_y, 0.0, cur_th);
 
-        % Draw 3D LiDAR/Camera Perception Cone Rays
+        % Draw Front LiDAR Raycast Lines (-30°, 0°, +30°)
         sensor_rays = draw_sensor_cone(ax, cur_x, cur_y, 0.85, cur_th);
+
+        % Send live pose update to FastAPI middleware via webwrite
+        telemetry_packet = struct( ...
+            'x', round(cur_x, 3), ...
+            'y', round(cur_y, 3), ...
+            'theta_rad', round(cur_th, 3), ...
+            'linear_velocity', 0.8, ...
+            'user_steering_deg', 14.0, ...
+            'scenario', 'Doorway' ...
+        );
+        try
+            webwrite(telemetry_url, telemetry_packet, web_opts);
+        catch
+            % Continue simulation if FastAPI server is not active
+        end
 
         % Update HUD Text
         aeb_text = 'ACTIVE';
@@ -135,56 +156,57 @@ function waylo_3d_environment()
             sprintf('Pose (X, Y, \\theta): [%+.2f, %.2f m, %+.1f°]', cur_x, cur_y, rad2deg(cur_th)), ...
             sprintf('Shared-Autonomy \\alpha: \\bf%0.2f', cur_alpha), ...
             sprintf('Left/Right Clearance: %0.2f m', cur_clearance), ...
-            sprintf('Hazard Risk: %d%% | Status: %s', risk_pct, aeb_text) ...
+            sprintf('Hazard Risk: %d%% | Status: %s', risk_pct, aeb_text), ...
+            sprintf('Telemetry: webwrite -> :8000/api/matlab/telemetry') ...
         });
 
         drawnow;
         pause(0.04);
     end
 
-    fprintf('3D Perception Animation complete. WAYLO guided wheelchair safely through doorway.\n');
+    fprintf('3D Perception Animation complete. WAYLO guided wheelchair safely through 1.2m doorway.\n');
 end
 
 % =========================================================================
-% Helper: Draw 3D Room Architecture
+% Helper: Draw 3D Room Architecture (Walls, Floor Grid, 1.2m Doorway Lintel)
 % =========================================================================
 function draw_room_environment(ax)
-    % Floor (8m x 7m)
+    % Floor Grid (8m x 7m)
     [Xf, Yf] = meshgrid(-3.5:0.5:3.5, 0.0:0.5:6.5);
     Zf = zeros(size(Xf));
     surf(ax, Xf, Yf, Zf, 'FaceColor', [0.12 0.14 0.19], ...
          'EdgeColor', [0.18 0.22 0.30], 'FaceAlpha', 0.9);
 
-    % Doorway Walls at Y = 4.5m with a 1.4m central opening (X from -0.7 to +0.7)
+    % Doorway Walls at Y = 4.5m with a 1.2m central opening (X from -0.6m to +0.6m)
     wall_color = [0.25 0.30 0.40];
     lintel_color = [0.35 0.42 0.55];
 
-    % Left Wall: X from -3.5 to -0.7, Y = 4.5, Z from 0 to 2.4
-    draw_box(ax, [-3.5, 4.45, 0.0], [-0.7, 4.55, 2.4], wall_color, 0.85);
+    % Left Wall: X from -3.5 to -0.6, Y = 4.5, Z from 0 to 2.4
+    draw_box(ax, [-3.5, 4.45, 0.0], [-0.6, 4.55, 2.4], wall_color, 0.85);
 
-    % Right Wall: X from 0.7 to 3.5, Y = 4.5, Z from 0 to 2.4
-    draw_box(ax, [0.7, 4.45, 0.0], [3.5, 4.55, 2.4], wall_color, 0.85);
+    % Right Wall: X from 0.6 to 3.5, Y = 4.5, Z from 0 to 2.4
+    draw_box(ax, [0.6, 4.45, 0.0], [3.5, 4.55, 2.4], wall_color, 0.85);
 
-    % Doorway Top Lintel Beam (Spans over opening from -0.7 to 0.7, Z from 2.1 to 2.4)
-    draw_box(ax, [-0.7, 4.45, 2.1], [0.7, 4.55, 2.4], lintel_color, 0.95);
+    % 1.2m Target Doorway Top Lintel Beam (Spans over opening from -0.6 to 0.6, Z from 2.1 to 2.4)
+    draw_box(ax, [-0.6, 4.45, 2.1], [0.6, 4.55, 2.4], lintel_color, 0.95);
 
     % Doorway Portal Threshold Line on Floor (Green)
-    plot3(ax, [-0.7, 0.7], [4.5, 4.5], [0.02, 0.02], 'LineWidth', 4, 'Color', [0.15 0.85 0.45]);
-    text(ax, 0.0, 4.5, 2.55, 'DOORWAY TARGET (1.4m)', ...
+    plot3(ax, [-0.6, 0.6], [4.5, 4.5], [0.02, 0.02], 'LineWidth', 4, 'Color', [0.15 0.85 0.45]);
+    text(ax, 0.0, 4.5, 2.55, 'TARGET DOORWAY LINTEL (1.2m)', ...
          'Color', [0.55 0.95 0.65], 'FontSize', 10, 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
 
-    % Tight Corridor Guide Walls from Y=1.5 to Y=3.5 (Width 1.2m)
+    % Corridor Walls from Y=1.5 to Y=3.5 (1.2m width)
     draw_box(ax, [-3.5, 1.5, 0.0], [-1.2, 3.5, 1.5], [0.20 0.24 0.32], 0.4);
     draw_box(ax, [1.2, 1.5, 0.0], [3.5, 3.5, 1.5], [0.20 0.24 0.32], 0.4);
 
-    % Dynamic Obstacle at [1.8, 2.5]
+    % Obstacle at [1.8, 2.5]
     draw_cylinder(ax, 1.8, 2.5, 0.25, 1.2, [0.9 0.3 0.3]);
     text(ax, 1.8, 2.5, 1.35, 'Obstacle', 'Color', [1.0 0.4 0.4], ...
          'FontSize', 8, 'HorizontalAlignment', 'center');
 end
 
 % =========================================================================
-% Helper: Draw Detailed 3D Electric Wheelchair Model
+% Helper: Draw 3D Differential-Drive Wheelchair Base Model
 % =========================================================================
 function handles = draw_wheelchair_3d(ax, x0, y0, z0, theta)
     handles = [];
@@ -192,10 +214,9 @@ function handles = draw_wheelchair_3d(ax, x0, y0, z0, theta)
          sin(theta),  cos(theta), 0;
          0,           0,          1];
 
-    % Transformation function
     tf = @(pts) (R * pts')' + [x0, y0, z0];
 
-    % 1. Main Base Chassis (Black/Dark Slate)
+    % 1. Main Base Chassis (Dark Slate)
     chassis_pts = [-0.30, -0.25, 0.08;
                     0.30, -0.25, 0.08;
                     0.30,  0.25, 0.08;
@@ -231,12 +252,17 @@ function handles = draw_wheelchair_3d(ax, x0, y0, z0, theta)
     h_back = draw_transformed_box(ax, tf(back_pts), [0.12 0.35 0.75]);
     handles = [handles; h_back];
 
-    % 4. Left & Right Drive Wheels (Cylinders at rear, radius 0.16m)
+    % 4. Dual Drive Wheels (Rear Left & Right, radius 0.16m, track L=0.60m)
     h_w1 = draw_wheel(ax, tf([-0.05, -0.30, 0.16]), theta, [0.08 0.08 0.08]);
     h_w2 = draw_wheel(ax, tf([-0.05,  0.30, 0.16]), theta, [0.08 0.08 0.08]);
     handles = [handles; h_w1; h_w2];
 
-    % 5. Perception Sensor Tower / LiDAR Pod on Backrest
+    % 5. Front Casters (Dual Free-Swiveling Wheels at Front Left & Right)
+    h_c1 = draw_caster(ax, tf([0.22, -0.20, 0.06]), [0.4 0.45 0.55]);
+    h_c2 = draw_caster(ax, tf([0.22,  0.20, 0.06]), [0.4 0.45 0.55]);
+    handles = [handles; h_c1; h_c2];
+
+    % 6. Perception Sensor Tower / LiDAR Pod on Backrest
     pod_pts = [-0.04, -0.05, 0.80;
                 0.04, -0.05, 0.80;
                 0.04,  0.05, 0.80;
@@ -250,27 +276,29 @@ function handles = draw_wheelchair_3d(ax, x0, y0, z0, theta)
 end
 
 % =========================================================================
-% Helper: Draw Perception Sensor Cone (LiDAR / Camera Rays)
+% Helper: Draw Front LiDAR Raycast Lines (-30°, 0°, +30°)
 % =========================================================================
 function handles = draw_sensor_cone(ax, x0, y0, z0, theta)
     handles = [];
-    ray_angles = linspace(-0.45, 0.45, 7); % 50-degree field of view
-    ray_length = 2.4;
+    % Front LiDAR raycast lines at -30 deg, 0 deg, +30 deg
+    ray_angles_deg = [-30, 0, 30];
+    ray_length = 2.6;
 
-    for a = ray_angles
-        ray_th = theta + a;
+    for ang = ray_angles_deg
+        rad_offset = deg2rad(ang);
+        ray_th = theta + rad_offset;
         target_x = x0 + ray_length * sin(ray_th);
         target_y = y0 + ray_length * cos(ray_th);
-        target_z = 0.15; % ground intersection
+        target_z = 0.10; % Ground intersection level
 
         h_line = plot3(ax, [x0, target_x], [y0, target_y], [z0, target_z], ...
-                       ':', 'Color', [0.2 0.8 1.0, 0.45], 'LineWidth', 1.2);
+                       '--', 'Color', [0.2 0.85 1.0, 0.65], 'LineWidth', 1.8);
         handles = [handles; h_line];
     end
 end
 
 % =========================================================================
-% Helpers: Geometry Primitives
+% Geometry Primitives
 % =========================================================================
 function h = draw_box(ax, p_min, p_max, color, alpha)
     x = [p_min(1), p_max(1)];
@@ -311,6 +339,13 @@ function h = draw_wheel(ax, center, theta, color)
     h = patch(ax, pts(:,1), pts(:,2), pts(:,3), color, 'EdgeColor', [0.4 0.45 0.55], 'LineWidth', 1.2);
 end
 
+function h = draw_caster(ax, center, color)
+    r = 0.06;
+    [Xs, Ys, Zs] = sphere(10);
+    h = surf(ax, Xs*r + center(1), Ys*r + center(2), Zs*r + center(3), ...
+             'FaceColor', color, 'EdgeColor', 'none');
+end
+
 % =========================================================================
 % Simulation Functions
 % =========================================================================
@@ -321,8 +356,8 @@ function [x, y, th] = simulate_trajectory(N, dt, user_steer_deg, copilot_corr_de
     x(1) = 0.0;
     y(1) = 0.5;
     th(1) = 0.0;
-    v = 0.8; % m/s
-    L = 0.60; % wheelbase
+    v = 0.8;
+    L = 0.60;
 
     effective_steer = user_steer_deg + copilot_corr_deg;
     omega = (v / L) * tand(effective_steer);
@@ -349,16 +384,14 @@ function [x, y, th, alpha_hist, clearance_hist] = simulate_waylo_copilot(N, dt, 
     door_y = 4.5;
 
     for i = 1:N-1
-        % Calculate distance to doorway
         dist_y = door_y - y(i);
         
-        % Dynamic clearance to doorway jambs (1.4m width, -0.7 to +0.7)
-        left_clearance = max(0.05, 0.70 + x(i));
-        right_clearance = max(0.05, 0.70 - x(i));
+        % 1.2m target doorway opening (-0.6m to +0.6m)
+        left_clearance = max(0.05, 0.60 + x(i));
+        right_clearance = max(0.05, 0.60 - x(i));
         min_clearance = min(left_clearance, right_clearance);
         clearance_hist(i) = round(min_clearance, 2);
 
-        % Shared autonomy arbitration weight alpha
         if dist_y > 0 && dist_y < 2.5
             alpha = min(0.92, max(0.15, (2.5 - dist_y) / 2.5 + abs(x(i)) * 0.4));
             centering_corr_deg = - (x(i) * 35.0 + th(i) * 20.0);
@@ -368,7 +401,6 @@ function [x, y, th, alpha_hist, clearance_hist] = simulate_waylo_copilot(N, dt, 
         end
         alpha_hist(i) = round(alpha, 2);
 
-        % Blended steering & speed
         blended_steer = (1 - alpha) * user_steer_deg + alpha * (user_steer_deg + centering_corr_deg);
         v_current = (1 - alpha) * v_base + alpha * min(v_base, 0.65);
 
