@@ -20,13 +20,13 @@ def anonymize_spatial_feed(raw_frame_bytes: str = "raw_rgbd_stream_001") -> Dict
     seed = int(hashlib.md5(str(raw_frame_bytes).encode("utf-8")).hexdigest()[:8], 16)
 
     # Synthesize anonymized 3D depth point cloud (X, Y, Z coordinates in wheelchair frame)
-    # Target object cluster (e.g. object to grasp or button to press)
+    # Target obstacle cluster (e.g. doorway frame or corridor obstruction)
     base_dist = 0.45 + (seed % 30) * 0.01  # ~0.45m to 0.75m distance
     num_points = 64
     point_cloud_vectors: List[List[float]] = []
 
     for i in range(num_points):
-        # Generate spatial depth point relative to wheelchair arm mount base
+        # Generate spatial depth point relative to wheelchair sensor base
         angle_rad = -0.4 + (i / float(num_points)) * 0.8
         dist = base_dist + math.sin(i * 0.5) * 0.05
         x = round(dist * math.sin(angle_rad), 3)
