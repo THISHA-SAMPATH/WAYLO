@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #14201B;
+    background-color: #F4F2EC;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-size: 18px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #F4F2EC;
+    color: #14201B;
+  }
+
+  /* Accessible visible focus ring */
+  *:focus-visible {
+    outline: 2px solid #17352B;
+    outline-offset: 3px;
+  }
+}
+
+@layer utilities {
+  /* Marker-style highlight behind ONE word in headlines */
+  .marker-highlight {
+    position: relative;
+    display: inline-block;
+    z-index: 1;
+    white-space: nowrap;
+  }
+
+  .marker-highlight::before {
+    content: '';
+    position: absolute;
+    left: -0.18em;
+    right: -0.18em;
+    bottom: 0.08em;
+    height: 0.45em;
+    background-color: #E3F26D;
+    z-index: -1;
+    border-radius: 4px;
+    transform: rotate(-0.6deg);
+  }
+
+  /* Reduced motion respect */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
