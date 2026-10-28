@@ -1,0 +1,219 @@
+{
+  "dataset": "ETHZ Legged Robotics FunThor Indoor Depth Dataset",
+  "sensor": "16-bit millimeter indoor depth camera",
+  "total_frames": 20,
+  "detected_count": 19,
+  "detection_rate": 0.95,
+  "nominal_ground_truth_width_m": 0.9,
+  "overall_mean_abs_width_error_m": 0.5551,
+  "overall_median_abs_width_error_m": 0.655,
+  "canonical_approach_frames_count": 7,
+  "canonical_approach_mae_m": 0.1769,
+  "limitations": [
+    "Glancing / oblique approach angles (>80 deg) cause extreme perspective foreshortening of door jambs.",
+    "Partial occlusion of a jamb by adjacent room partition leads to aperture width underestimation (e.g. 0.05m-0.45m).",
+    "Wide open archways / multi-room partitions are reported as wide apertures (>1.5m)."
+  ],
+  "frames": [
+    {
+      "frame_idx": 0,
+      "filename": "000000.png",
+      "detected": true,
+      "width_m": 1.094,
+      "width_error_m": 0.194,
+      "distance_m": 1.36,
+      "lateral_offset_m": 0.356,
+      "approach_angle_deg": -84.2
+    },
+    {
+      "frame_idx": 1,
+      "filename": "000001.png",
+      "detected": true,
+      "width_m": 1.683,
+      "width_error_m": 0.783,
+      "distance_m": 2.2,
+      "lateral_offset_m": 0.295,
+      "approach_angle_deg": -97.6
+    },
+    {
+      "frame_idx": 2,
+      "filename": "000002.png",
+      "detected": true,
+      "width_m": 0.057,
+      "width_error_m": 0.843,
+      "distance_m": 0.703,
+      "lateral_offset_m": -0.171,
+      "approach_angle_deg": -82.4
+    },
+    {
+      "frame_idx": 3,
+      "filename": "000003.png",
+      "detected": true,
+      "width_m": 1.046,
+      "width_error_m": 0.146,
+      "distance_m": 1.93,
+      "lateral_offset_m": 0.41,
+      "approach_angle_deg": -82.6
+    },
+    {
+      "frame_idx": 4,
+      "filename": "000004.png",
+      "detected": true,
+      "width_m": 1.952,
+      "width_error_m": 1.052,
+      "distance_m": 1.533,
+      "lateral_offset_m": 0.664,
+      "approach_angle_deg": -48.1
+    },
+    {
+      "frame_idx": 5,
+      "filename": "000005.png",
+      "detected": true,
+      "width_m": 1.674,
+      "width_error_m": 0.774,
+      "distance_m": 1.663,
+      "lateral_offset_m": 0.355,
+      "approach_angle_deg": -77.6
+    },
+    {
+      "frame_idx": 6,
+      "filename": "000006.png",
+      "detected": false,
+      "width_m": 0.0,
+      "width_error_m": null,
+      "distance_m": 0.0,
+      "lateral_offset_m": 0.0,
+      "approach_angle_deg": 0.0
+    },
+    {
+      "frame_idx": 7,
+      "filename": "000007.png",
+      "detected": true,
+      "width_m": 1.935,
+      "width_error_m": 1.035,
+      "distance_m": 1.77,
+      "lateral_offset_m": 0.566,
+      "approach_angle_deg": -61.6
+    },
+    {
+      "frame_idx": 8,
+      "filename": "000008.png",
+      "detected": true,
+      "width_m": 1.067,
+      "width_error_m": 0.167,
+      "distance_m": 1.18,
+      "lateral_offset_m": -0.355,
+      "approach_angle_deg": -108.6
+    },
+    {
+      "frame_idx": 9,
+      "filename": "000009.png",
+      "detected": true,
+      "width_m": 0.678,
+      "width_error_m": 0.222,
+      "distance_m": 0.983,
+      "lateral_offset_m": -0.068,
+      "approach_angle_deg": -122.0
+    },
+    {
+      "frame_idx": 10,
+      "filename": "000010.png",
+      "detected": true,
+      "width_m": 1.744,
+      "width_error_m": 0.844,
+      "distance_m": 2.073,
+      "lateral_offset_m": -0.059,
+      "approach_angle_deg": -88.4
+    },
+    {
+      "frame_idx": 11,
+      "filename": "000011.png",
+      "detected": true,
+      "width_m": 1.265,
+      "width_error_m": 0.365,
+      "distance_m": 1.321,
+      "lateral_offset_m": -0.341,
+      "approach_angle_deg": -105.7
+    },
+    {
+      "frame_idx": 12,
+      "filename": "000012.png",
+      "detected": true,
+      "width_m": 0.157,
+      "width_error_m": 0.743,
+      "distance_m": 0.655,
+      "lateral_offset_m": 0.388,
+      "approach_angle_deg": -50.6
+    },
+    {
+      "frame_idx": 13,
+      "filename": "000013.png",
+      "detected": true,
+      "width_m": 0.248,
+      "width_error_m": 0.652,
+      "distance_m": 1.386,
+      "lateral_offset_m": 0.243,
+      "approach_angle_deg": -102.9
+    },
+    {
+      "frame_idx": 14,
+      "filename": "000014.png",
+      "detected": true,
+      "width_m": 0.929,
+      "width_error_m": 0.029,
+      "distance_m": 0.987,
+      "lateral_offset_m": 0.33,
+      "approach_angle_deg": -65.2
+    },
+    {
+      "frame_idx": 15,
+      "filename": "000015.png",
+      "detected": true,
+      "width_m": 1.555,
+      "width_error_m": 0.655,
+      "distance_m": 1.218,
+      "lateral_offset_m": -0.64,
+      "approach_angle_deg": -139.0
+    },
+    {
+      "frame_idx": 16,
+      "filename": "000016.png",
+      "detected": true,
+      "width_m": 1.708,
+      "width_error_m": 0.808,
+      "distance_m": 1.517,
+      "lateral_offset_m": -0.491,
+      "approach_angle_deg": -119.5
+    },
+    {
+      "frame_idx": 17,
+      "filename": "000017.png",
+      "detected": true,
+      "width_m": 0.448,
+      "width_error_m": 0.452,
+      "distance_m": 0.579,
+      "lateral_offset_m": 0.007,
+      "approach_angle_deg": -29.2
+    },
+    {
+      "frame_idx": 18,
+      "filename": "000018.png",
+      "detected": true,
+      "width_m": 1.567,
+      "width_error_m": 0.667,
+      "distance_m": 1.226,
+      "lateral_offset_m": 0.487,
+      "approach_angle_deg": -50.8
+    },
+    {
+      "frame_idx": 19,
+      "filename": "000019.png",
+      "detected": true,
+      "width_m": 1.015,
+      "width_error_m": 0.115,
+      "distance_m": 1.136,
+      "lateral_offset_m": -0.317,
+      "approach_angle_deg": -105.0
+    }
+  ]
+}
