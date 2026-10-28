@@ -57,7 +57,8 @@ def door_clearance(room, x, y, phi) -> Optional[float]:
 def run(assist_or_mode: bool | str = False, drift_deg: float = 14.0, speed_mps: float = 0.85, door_width_m: float = 1.4,
         tremor_deg: float = 2.0, duration_s: float = 9.0, seed: int = 7,
         reaction_delay_s: float = 0.35, visual_gain: float = 1.2, joystick_noise_deg: float = 1.0,
-        fatigue_rate: float = 0.05, driver_model: Optional[str] = None) -> dict:
+        fatigue_rate: float = 0.05, driver_model: Optional[str] = None,
+        lidar_noise_m: float = 0.02, lidar_dropout_prob: float = 0.02, sensor_latency_s: float = 0.1) -> dict:
     if isinstance(assist_or_mode, str):
         norm = assist_or_mode.strip().lower()
         if norm in ("waylo", "assist", "assisted"):
@@ -92,9 +93,10 @@ def run(assist_or_mode: bool | str = False, drift_deg: float = 14.0, speed_mps: 
     collision_t, min_door_clear, x_at_door, stopped = None, None, None, False
     prev_y = y
 
-    # Buffer for human visual-motor reaction delay
+    # Buffer for human visual-motor reaction delay and sensor latency
     history = []
     delay_steps = max(1, int(round(reaction_delay_s / DT)))
+    sensor_delay_steps = max(0, int(round(sensor_latency_s / DT)))
 
     for k in range(int(duration_s / DT)):
         t = k * DT
@@ -139,12 +141,17 @@ def run(assist_or_mode: bool | str = False, drift_deg: float = 14.0, speed_mps: 
             omega = HEADING_GAIN * (phi_user - phi)
             v = v_user
         else:
-            scan = lidar_scan(room, x, y, phi)
+            # Query delayed sensor pose and add LiDAR range noise and ray dropouts
+            sens_idx = max(0, k - sensor_delay_steps)
+            x_s, y_s, phi_s = history[sens_idx]
+            scan = lidar_scan(room, x_s, y_s, phi_s,
+                              noise_sigma_m=lidar_noise_m, dropout_prob=lidar_dropout_prob, rng=rng)
             fr = front_range(scan)
             clear_l, clear_r = side_clearances(scan)
-            gap = detect_gap(scan, y)
+            gap = detect_gap(scan, y_s)
             if gap:
-                gap_world = gap
+                if gap_world is None or abs(gap["center_y"] - gap_world["center_y"]) < 1.0:
+                    gap_world = gap
             if gap_world is not None:
                 dxw, dyw = gap_world["center_x"] - x, gap_world["center_y"] - y
                 fwd = dyw * math.cos(phi) + dxw * math.sin(phi)

@@ -37,3 +37,34 @@ def test_summary_text_mentions_opening():
     room = p.build_room()
     scan = p.lidar_scan(room, 0.0, 1.5, 0.0)
     assert "Opening detected" in p.scan_summary_text(scan, p.detect_gap(scan, 1.5))
+
+
+def test_lidar_noise_and_dropouts_perturb_ranges():
+    import numpy as np
+    room = p.build_room(1.4)
+    clean = p.lidar_scan(room, 0.0, 1.5, 0.0)
+    rng = np.random.default_rng(42)
+    noisy = p.lidar_scan(room, 0.0, 1.5, 0.0, noise_sigma_m=0.02, dropout_prob=0.05, rng=rng)
+
+    # Clean and noisy ranges must not be identical
+    diffs = noisy["ranges"] - clean["ranges"]
+    assert not np.allclose(clean["ranges"], noisy["ranges"])
+
+    # Non-dropout rays should exhibit standard deviation consistent with sigma=0.02
+    non_drop = noisy["ranges"] < clean["max_range"] - 1e-6
+    assert np.std(diffs[non_drop]) > 0.01
+
+    # Dropout rays should hit max_range
+    assert np.any(noisy["ranges"] == clean["max_range"])
+
+
+def test_noisy_perception_reliably_detects_gap():
+    import numpy as np
+    room = p.build_room(1.4)
+    rng = np.random.default_rng(123)
+    scan = p.lidar_scan(room, 0.0, 2.0, 0.0, noise_sigma_m=0.02, dropout_prob=0.02, rng=rng)
+    gap = p.detect_gap(scan, 2.0)
+    assert gap is not None
+    assert abs(gap["center_x"]) < 0.15
+    assert abs(gap["width"] - 1.4) < 0.25
+    assert abs(gap["center_y"] - p.DOOR_Y) < 0.10

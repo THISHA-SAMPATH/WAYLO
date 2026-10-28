@@ -59,3 +59,43 @@ def test_corrective_human_attempts_visual_recovery():
     # But uncorrected collides due to pure open-loop drift
     assert res["uncorrected"]["summary"]["collision"]
 
+
+def test_simulation_sensor_noise_parameters():
+    # Verify simulation accepts custom sensor latency and LiDAR noise
+    res = sim.run("waylo", drift_deg=8.0, door_width_m=1.4,
+                  lidar_noise_m=0.03, lidar_dropout_prob=0.05, sensor_latency_s=0.15)
+    assert res["summary"]["assist"] is True
+    assert res["summary"]["passed_door"] is True
+
+
+def test_control_loop_makes_zero_network_calls(monkeypatch):
+    """Audit requirement 8: prove that the real-time control loop makes zero network calls."""
+    import socket
+    import urllib.request
+
+    def blocked_network(*args, **kwargs):
+        raise AssertionError("Network call attempted during real-time control loop!")
+
+    monkeypatch.setattr(socket, "socket", blocked_network)
+    monkeypatch.setattr(socket, "create_connection", blocked_network)
+    monkeypatch.setattr(urllib.request, "urlopen", blocked_network)
+
+    # 1. Perception pipeline
+    room = sim.build_room(1.2)
+    scan = sim.lidar_scan(room, 0.0, 1.5, 0.0, noise_sigma_m=0.02, dropout_prob=0.02)
+    gap = sim.detect_gap(scan, 1.5)
+    fr = sim.front_range(scan)
+    cl, cr = sim.side_clearances(scan)
+    assert gap is not None
+
+    # 2. Arbitration & control blending
+    alpha = sim.core.compute_alpha(25.0, 0.20)
+    phi_cmd = sim.core.blend(0.2, 0.0, alpha)
+    v_cmd = sim.core.blend(0.8, 0.6, alpha)
+    assert 0.0 <= alpha <= 1.0
+
+    # 3. Full closed-loop 50 Hz simulation (hundreds of control iterations)
+    res = sim.run("waylo", drift_deg=10.0, speed_mps=0.85, door_width_m=1.2, duration_s=4.0)
+    assert res["summary"]["assist"] is True
+    assert len(res["t"]) > 100
+

@@ -45,7 +45,9 @@ def build_room(door_width: float = 1.4) -> Room:
 
 
 def lidar_scan(room: Room, x: float, y: float, phi: float, n_rays: int = 61,
-               fov_deg: float = 180.0, max_range: float = 7.0, sensor_offset: float = 0.40) -> dict:
+               fov_deg: float = 180.0, max_range: float = 7.0, sensor_offset: float = 0.40,
+               noise_sigma_m: float = 0.0, dropout_prob: float = 0.0,
+               rng: Optional[np.random.Generator] = None) -> dict:
     """Ray-cast a forward scanner. Returns relative angles, ranges and world hit points."""
     rel = np.radians(np.linspace(-fov_deg / 2, fov_deg / 2, n_rays))
     ox, oy = x + sensor_offset * math.sin(phi), y + sensor_offset * math.cos(phi)
@@ -63,6 +65,15 @@ def lidar_scan(room: Room, x: float, y: float, phi: float, n_rays: int = 61,
     valid = (np.abs(denom) > 1e-9) & (t > 1e-6) & (u >= 0.0) & (u <= 1.0)
     t = np.where(valid, t, np.inf)
     ranges = np.minimum(t.min(axis=1), max_range)
+
+    if noise_sigma_m > 0.0 or dropout_prob > 0.0:
+        gen = rng if rng is not None else np.random.default_rng()
+        if noise_sigma_m > 0.0:
+            ranges = np.clip(ranges + gen.normal(0.0, noise_sigma_m, size=ranges.shape), 0.0, max_range)
+        if dropout_prob > 0.0:
+            drop_mask = gen.uniform(0.0, 1.0, size=ranges.shape) < dropout_prob
+            ranges[drop_mask] = max_range
+
     hits = np.stack([ox + dx * ranges, oy + dy * ranges], axis=1)
     return {"rel_angles": rel, "ranges": ranges, "hits": hits, "origin": (ox, oy), "max_range": max_range}
 
@@ -116,8 +127,11 @@ def detect_gap(scan: dict, pose_y: float) -> Optional[dict]:
         return None
     xl = hx[left_wall[-1]]       # nearest wall hit left of the gap
     xr = hx[right_wall[0]]       # nearest wall hit right of the gap
+    width = float(abs(xr - xl))
+    if width < 0.50:             # filter out single ray dropouts on solid walls
+        return None
     return {"center_x": float((xl + xr) / 2), "center_y": float(wall_y),
-            "width": float(abs(xr - xl)), "left_edge_x": float(xl), "right_edge_x": float(xr)}
+            "width": width, "left_edge_x": float(xl), "right_edge_x": float(xr)}
 
 
 def front_range(scan: dict, half_angle_deg: float = 6.0) -> float:
