@@ -1,5 +1,8 @@
 import type {
   ClosedLoopResponse,
+  SimulationConditionResult,
+  SimulationSummary,
+  TrajectoryPoint,
   PerceptionScanResponse,
   VoiceCommandResponse,
   IncidentNarrationResponse,
@@ -19,6 +22,83 @@ async function handleResponse<T>(res: Response, fallbackDesc: string): Promise<T
     throw new Error(`${fallbackDesc} failed (${res.status}): ${errorText}`)
   }
   return res.json() as Promise<T>
+}
+
+function parseSimulationCondition(raw: any): SimulationConditionResult {
+  if (!raw) {
+    return {
+      trajectory: [],
+      summary: { collision: false, peak_alpha: 0, duration_s: 0 },
+    }
+  }
+
+  // If already array of points
+  if (Array.isArray(raw.trajectory) && raw.trajectory.length > 0) {
+    const rawSum = raw.summary || {}
+    return {
+      trajectory: raw.trajectory,
+      summary: {
+        status: rawSum.status || (rawSum.passed_door ? 'PASSED' : rawSum.collision ? 'COLLISION' : 'RUNNING'),
+        passed: Boolean(rawSum.passed_door ?? !rawSum.collision),
+        passed_door: Boolean(rawSum.passed_door),
+        collision: Boolean(rawSum.collision),
+        min_clearance_m: rawSum.min_door_clearance_m ?? rawSum.min_clearance_m ?? 0,
+        min_door_clearance_m: rawSum.min_door_clearance_m,
+        peak_alpha: rawSum.peak_alpha ?? 0,
+        duration_s: rawSum.duration_s ?? 0,
+        scrape_count: rawSum.scrape_count ?? 0,
+        reason: rawSum.reason,
+      },
+    }
+  }
+
+  // Columnar format (t: number[], x: number[], y: number[]...)
+  const tArr: number[] = raw.t || []
+  const xArr: number[] = raw.x || []
+  const yArr: number[] = raw.y || []
+  const phiArr: number[] = raw.phi_deg || raw.phi || []
+  const vArr: number[] = raw.v || []
+  const alphaArr: number[] = raw.alpha || []
+  const riskArr: number[] = raw.risk || []
+  const clearLArr: number[] = raw.clear_left || raw.clear_l || []
+  const clearRArr: number[] = raw.clear_right || raw.clear_r || []
+  const frontRangeArr: number[] = raw.front_range || []
+  const aebArr: any[] = raw.aeb || []
+
+  const n = tArr.length
+  const trajectory: TrajectoryPoint[] = []
+
+  for (let i = 0; i < n; i++) {
+    trajectory.push({
+      t: tArr[i] ?? 0,
+      x: xArr[i] ?? 0,
+      y: yArr[i] ?? 0,
+      phi: phiArr[i] ?? 90,
+      v: vArr[i] ?? 0.8,
+      alpha: alphaArr[i] ?? 0,
+      risk: riskArr[i] ?? 0,
+      clear_left: clearLArr[i] ?? 0.5,
+      clear_right: clearRArr[i] ?? 0.5,
+      front_range: frontRangeArr[i] ?? 4.0,
+      aeb: Boolean(aebArr[i]),
+    })
+  }
+
+  const rawSum = raw.summary || {}
+  const summary: SimulationSummary = {
+    status: rawSum.status || (rawSum.passed_door ? 'PASSED' : rawSum.collision ? 'COLLISION' : 'RUNNING'),
+    passed: Boolean(rawSum.passed_door ?? !rawSum.collision),
+    passed_door: Boolean(rawSum.passed_door),
+    collision: Boolean(rawSum.collision),
+    min_clearance_m: rawSum.min_door_clearance_m ?? rawSum.min_clearance_m ?? 0,
+    min_door_clearance_m: rawSum.min_door_clearance_m,
+    peak_alpha: rawSum.peak_alpha ?? 0,
+    duration_s: rawSum.duration_s ?? (tArr[n - 1] || 0),
+    scrape_count: rawSum.scrape_count ?? 0,
+    reason: rawSum.reason,
+  }
+
+  return { trajectory, summary }
 }
 
 export const api = {
@@ -57,7 +137,13 @@ export const api = {
         ...params,
       }),
     })
-    return handleResponse<ClosedLoopResponse>(res, 'Simulate closed-loop')
+    const raw = await handleResponse<any>(res, 'Simulate closed-loop')
+    return {
+      params: raw.params || params,
+      unassisted: parseSimulationCondition(raw.unassisted),
+      corrective: parseSimulationCondition(raw.corrective || raw.unassisted),
+      waylo: parseSimulationCondition(raw.waylo),
+    }
   },
 
   async getPerceptionScan(params: {

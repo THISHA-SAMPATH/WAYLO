@@ -653,6 +653,28 @@ class ScanRequest(BaseModel):
 def _downsample(sim: dict, step: int = 5) -> dict:
     out = {k: [round(float(x), 3) for x in v[::step]] for k, v in sim.items() if k != "summary"}
     out["summary"] = sim["summary"]
+    n = len(out.get("t", []))
+    phi_list = out.get("phi_deg", out.get("phi", [90.0] * n))
+    cl_list = out.get("clear_left", out.get("clear_l", [0.5] * n))
+    cr_list = out.get("clear_right", out.get("clear_r", [0.5] * n))
+    fr_list = out.get("front_range", [4.0] * n)
+    aeb_list = out.get("aeb", [0] * n)
+    out["trajectory"] = [
+        {
+            "t": out["t"][i],
+            "x": out["x"][i],
+            "y": out["y"][i],
+            "phi": float(phi_list[i]) if i < len(phi_list) else 90.0,
+            "v": float(out["v"][i]) if i < len(out["v"]) else 0.8,
+            "alpha": float(out["alpha"][i]) if i < len(out["alpha"]) else 0.0,
+            "risk": float(out["risk"][i]) if i < len(out["risk"]) else 0.0,
+            "clear_left": float(cl_list[i]) if i < len(cl_list) else 0.5,
+            "clear_right": float(cr_list[i]) if i < len(cr_list) else 0.5,
+            "front_range": float(fr_list[i]) if i < len(fr_list) else 4.0,
+            "aeb": bool(aeb_list[i]) if i < len(aeb_list) else False,
+        }
+        for i in range(n)
+    ]
     return out
 
 @app.post("/api/simulate/closed-loop", summary="Unassisted vs WAYLO closed-loop doorway run", tags=["Simulation"])

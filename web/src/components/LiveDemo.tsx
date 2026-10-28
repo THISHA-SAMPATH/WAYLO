@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { ClosedLoopResponse, TrajectoryPoint } from '../types'
 import {
   Play,
+  Pause,
   RotateCcw,
   Sliders,
   Eye,
@@ -31,16 +32,28 @@ export const LiveDemo: React.FC = () => {
   const playTimerRef = useRef<number | null>(null)
 
   // Fetch simulation
-  const runSimulation = async () => {
+  const runSimulation = async (overrides?: {
+    door?: number
+    drift?: number
+    tremor?: number
+    delay?: number
+    fatigue?: number
+  }) => {
     setLoading(true)
     setError(null)
+    const door = overrides?.door ?? doorWidthM
+    const drift = overrides?.drift ?? driftDeg
+    const tremor = overrides?.tremor ?? tremorDeg
+    const delay = overrides?.delay ?? reactionDelayS
+    const fatigue = overrides?.fatigue ?? fatigueRate
+
     try {
       const data = await api.simulateClosedLoop({
-        door_width_m: doorWidthM,
-        drift_deg: driftDeg,
-        tremor_deg: tremorDeg,
-        reaction_delay_s: reactionDelayS,
-        fatigue_rate: fatigueRate,
+        door_width_m: door,
+        drift_deg: drift,
+        tremor_deg: tremor,
+        reaction_delay_s: delay,
+        fatigue_rate: fatigue,
       })
       setSimData(data)
       setStepIndex(0)
@@ -93,6 +106,7 @@ export const LiveDemo: React.FC = () => {
     setTremorDeg(preset.tremor)
     setReactionDelayS(preset.delay)
     setFatigueRate(preset.fatigue)
+    runSimulation(preset)
   }
 
   const currentWayloPoint: TrajectoryPoint | undefined =
@@ -193,11 +207,22 @@ export const LiveDemo: React.FC = () => {
           {/* Scrubber & Playback Controls Bar */}
           <div className="absolute bottom-4 left-4 right-4 z-10 bg-black/70 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-white flex items-center gap-3">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                const maxSteps = Math.max(
+                  simData?.waylo?.trajectory?.length || 0,
+                  simData?.unassisted?.trajectory?.length || 0
+                )
+                if (stepIndex >= maxSteps - 1) {
+                  setStepIndex(0)
+                  setIsPlaying(true)
+                } else {
+                  setIsPlaying(!isPlaying)
+                }
+              }}
               aria-label={isPlaying ? 'Pause simulation replay' : 'Play simulation replay'}
               className="w-10 h-10 rounded-xl bg-[#E3F26D] text-[#17352B] flex items-center justify-center font-bold hover:bg-white transition shrink-0 min-h-[40px]"
             >
-              <Play className="w-4 h-4 fill-current" />
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
             </button>
 
             <button
@@ -384,7 +409,7 @@ export const LiveDemo: React.FC = () => {
           {/* Action CTA */}
           <div className="pt-4 border-t border-[#14201B]/10 space-y-3">
             <button
-              onClick={runSimulation}
+              onClick={() => runSimulation()}
               disabled={loading}
               id="btn-run-simulation"
               className="w-full py-4 rounded-2xl bg-[#17352B] hover:bg-[#1f473a] text-white font-semibold text-base transition shadow-md hover:shadow-lg disabled:opacity-50 min-h-[52px] flex items-center justify-center gap-2"
