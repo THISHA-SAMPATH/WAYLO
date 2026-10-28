@@ -130,3 +130,37 @@ def test_nebius_audit_endpoint():
     assert data["status"] == "SUCCESS"
     assert "calls" in data
     assert isinstance(data["calls"], list)
+
+
+def test_monte_carlo_summary_endpoint():
+    r = client.get("/api/monte-carlo/summary")
+    assert r.status_code == 200
+    data = r.json()
+    assert "metadata" in data
+    assert "overall" in data
+    assert "by_door_width" in data
+    assert data["metadata"]["n_trials"] == 1000
+
+
+def test_monte_carlo_sensitivity_endpoint():
+    r = client.get("/api/monte-carlo/sensitivity")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert "rows" in data
+    assert len(data["rows"]) > 0
+
+
+def test_depth_benchmark_results_endpoint():
+    r = client.get("/api/depth-benchmark/results")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_frames"] == 20
+    assert data["detected_count"] >= 18
+
+
+def test_closed_loop_returns_corrective_condition():
+    r = client.post("/api/simulate/closed-loop", json={"drift_deg": 12.0, "door_width_m": 1.1}).json()
+    assert "corrective" in r
+    assert "waylo" in r
+    assert "unassisted" in r

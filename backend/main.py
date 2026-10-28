@@ -7,9 +7,13 @@ NVIDIA Nemotron / Cosmos on Nebius AI Cloud, and Tavily Accessibility Search.
 import os
 import math
 import time
+import json
+import csv
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -600,6 +604,9 @@ class ClosedLoopRequest(BaseModel):
     door_width_m: float = Field(default=1.4, ge=0.80, le=2.0, description="Clear door opening (ADA minimum 0.815 m)")
     tremor_deg: float = Field(default=2.0, ge=0, le=8, description="Hand-tremor amplitude (degrees)")
     duration_s: float = Field(default=9.0, gt=1, le=20)
+    reaction_delay_s: Optional[float] = Field(default=0.35, ge=0.05, le=1.0)
+    visual_gain: Optional[float] = Field(default=1.2, ge=0.2, le=3.0)
+    fatigue_rate: Optional[float] = Field(default=0.05, ge=0.0, le=0.2)
 
 class ScanRequest(BaseModel):
     x: float = 0.0
@@ -615,10 +622,12 @@ def _downsample(sim: dict, step: int = 5) -> dict:
 @app.post("/api/simulate/closed-loop", summary="Unassisted vs WAYLO closed-loop doorway run", tags=["Simulation"])
 def simulate_closed_loop(req: ClosedLoopRequest):
     """Runs the same driver input twice (no assist, then WAYLO) through a simulated LiDAR doorway."""
-    res = simulation.compare(**req.model_dump())
+    params = req.model_dump()
+    res = simulation.compare(**params)
     return {
-        "params": req.model_dump(),
+        "params": params,
         "unassisted": _downsample(res["unassisted"]),
+        "corrective": _downsample(res.get("corrective", res["unassisted"])),
         "waylo": _downsample(res["waylo"])
     }
 
@@ -720,6 +729,67 @@ def matlab_telemetry_hook(packet: MatlabTelemetryPacket):
         "hazard_risk_score": inference.get("hazard_risk_score", 10),
         "spatial_summary": inference.get("spatial_summary", "")
     }
+
+# ------------------------------------------------------------------------------
+# Evaluation & Benchmark Endpoints
+# ------------------------------------------------------------------------------
+@app.get("/api/overview", summary="API Overview", tags=["System"])
+def api_overview():
+    """Explicit JSON system overview endpoint."""
+    return root_overview()
+
+@app.get("/api/monte-carlo/summary", summary="Monte Carlo Aggregate Results", tags=["Evaluation"])
+def get_monte_carlo_summary():
+    """Serves the empirical Monte Carlo benchmark summary (N=1000, 95% Wilson CIs)."""
+    summary_path = PROJECT_ROOT / "data" / "monte_carlo" / "summary.json"
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail="Monte Carlo summary data not found")
+    with open(summary_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+@app.get("/api/monte-carlo/sensitivity", summary="Physiological Sensitivity Sweep Data", tags=["Evaluation"])
+def get_sensitivity_sweep():
+    """Serves parsed rows from the physiological sensitivity sweep CSV."""
+    sweep_path = PROJECT_ROOT / "data" / "monte_carlo" / "sensitivity.csv"
+    if not sweep_path.exists():
+        raise HTTPException(status_code=404, detail="Sensitivity sweep data not found")
+    with open(sweep_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return {"status": "SUCCESS", "rows": list(reader)}
+
+@app.get("/api/depth-benchmark/results", summary="Real Depth Image Benchmark", tags=["Evaluation"])
+def get_depth_benchmark_results():
+    """Serves the real depth benchmark results across 20 indoor frames."""
+    bench_path = PROJECT_ROOT / "data" / "depth_benchmark" / "benchmark_results.json"
+    if not bench_path.exists():
+        raise HTTPException(status_code=404, detail="Depth benchmark results not found")
+    with open(bench_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# ------------------------------------------------------------------------------
+# Single-Port Web Frontend Serving (Vite SPA)
+# ------------------------------------------------------------------------------
+WEB_DIST = PROJECT_ROOT / "web" / "dist"
+(WEB_DIST / "assets").mkdir(parents=True, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=str(WEB_DIST / "assets")), name="assets")
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_web_spa(full_path: str):
+    # Pass through API and system documentation routes
+    clean_path = full_path.strip("/")
+    if clean_path.startswith("api") or clean_path in ("health", "docs", "redoc", "openapi.json"):
+        raise HTTPException(status_code=404, detail=f"API route not found: /{clean_path}")
+
+    if WEB_DIST.exists():
+        file_target = WEB_DIST / clean_path
+        if clean_path and file_target.is_file():
+            return FileResponse(file_target)
+        index_target = WEB_DIST / "index.html"
+        if index_target.exists():
+            return FileResponse(index_target)
+
+    # When web frontend is not yet built, serve the API overview
+    return root_overview()
 
 # ==============================================================================
 # Main Runner
