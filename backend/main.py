@@ -33,7 +33,7 @@ try:
         DEFAULT_MODEL,
         DEFAULT_NEBIUS_BASE_URL
     )
-    from .tavily_search import fetch_accessibility_context, get_standard_specs
+    from .tavily_search import fetch_accessibility_context, fetch_regional_doorway_spec, get_standard_specs
     from .privacy_scrubber import anonymize_spatial_feed
     from . import core, perception, simulation
 except (ImportError, ValueError):
@@ -48,7 +48,7 @@ except (ImportError, ValueError):
         DEFAULT_MODEL,
         DEFAULT_NEBIUS_BASE_URL
     )
-    from backend.tavily_search import fetch_accessibility_context, get_standard_specs
+    from backend.tavily_search import fetch_accessibility_context, fetch_regional_doorway_spec, get_standard_specs
     from backend.privacy_scrubber import anonymize_spatial_feed
     from backend import core, perception, simulation
 
@@ -214,12 +214,19 @@ class KinematicsBlendResponse(BaseModel):
 
 class AccessibilitySearchRequest(BaseModel):
     query: str = Field(
-        default="ADA wheelchair doorway minimum clear width",
+        default="wheelchair doorway minimum clear width",
         description="Query to search accessibility building codes and standards"
+    )
+    region: str = Field(
+        default="US",
+        description="Regional standard jurisdiction (US, UK, EU, AU, CA, GLOBAL)"
     )
 
 class AccessibilitySearchResponse(BaseModel):
     query: str
+    region: str
+    min_doorway_width_m: float
+    source: str
     standards_context: str
     standard_specs: Dict[str, Any]
 
@@ -522,13 +529,15 @@ def blend_kinematics(req: KinematicsBlendRequest):
     tags=["Accessibility"]
 )
 def search_accessibility_standards(req: AccessibilitySearchRequest):
-    """Queries Tavily API or standards catalog for ADA / ISO 7176 spatial accessibility regulations."""
-    context = fetch_accessibility_context(req.query)
-    context_str = context.get("formatted_context", str(context)) if isinstance(context, dict) else str(context)
+    """Queries Tavily API or standards catalog for regional doorway accessibility regulations."""
+    spec = fetch_regional_doorway_spec(region=req.region, query_override=req.query)
     specs = get_standard_specs()
     return AccessibilitySearchResponse(
         query=req.query,
-        standards_context=context_str,
+        region=spec["region"],
+        min_doorway_width_m=spec["min_doorway_width_m"],
+        source=spec["source"],
+        standards_context=spec["formatted_context"],
         standard_specs=specs
     )
 
