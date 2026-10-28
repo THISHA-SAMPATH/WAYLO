@@ -7,15 +7,32 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Nebius AI Cloud](https://img.shields.io/badge/Nebius_AI-Token_Factory-00D4FF?logo=cloud&logoColor=white)](https://tokenfactory.nebius.com)
 [![NVIDIA Nemotron](https://img.shields.io/badge/NVIDIA-Nemotron-76B900?logo=nvidia&logoColor=white)](https://tokenfactory.nebius.com)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](http://localhost:8000/docs)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
-[![MATLAB 3D Kinematics](https://img.shields.io/badge/MATLAB-3D_Kinematics-ED8B00?logo=mathworks&logoColor=white)](https://mathworks.com)
-[![Tavily Search](https://img.shields.io/badge/Tavily-Regional_Accessibility_Standards-4F46E5)](https://tavily.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Single_Port_8000-009688?logo=fastapi&logoColor=white)](http://localhost:8000/docs)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Three.js](https://img.shields.io/badge/Three.js-Digital_Twin-black?logo=threedotjs&logoColor=white)](https://threejs.org)
+[![Pytest](https://img.shields.io/badge/Pytest-75_Passed-0A9EDC?logo=pytest&logoColor=white)](tests/)
+[![Vitest](https://img.shields.io/badge/Vitest-5_Passed-FCC72B?logo=vitest&logoColor=white)](web/)
+[![Tavily Search](https://img.shields.io/badge/Tavily-Accessibility_Standards-4F46E5)](https://tavily.com)
 
 ---
 
 > [!NOTE]
 > **SIMULATION RESEARCH DISCLAIMER**: All performance benchmarks, collision statistics, pass rates, and kinematics reported in this repository are evaluated in simulated physical environments (closed-loop Runge-Kutta 4th-order ODE kinematics and simulated 2D LiDAR ray-casting in parameterized doorway scenarios). These results represent robotic software simulation benchmarks, not physical clinical road trials with human patients.
+
+---
+
+## 📸 Web Application & 3D Digital Twin
+
+WAYLO features a modern, accessible web interface served directly by FastAPI on a single port (`http://localhost:8000` via `python run.py`).
+
+| Copilot Web Application | Interactive 3D Digital Twin |
+| :---: | :---: |
+| ![WAYLO Hero Demo](docs/hero_demo.png) | ![Interactive 3D Digital Twin](docs/live_3d_demo.png) |
+
+<p align="center">
+  <b>Comprehensive N=1000 Scientific Evidence & Limitations Dossier:</b><br/>
+  <img src="docs/evidence_page.png" alt="WAYLO Empirical Evidence and Limitations Dossier" width="95%" />
+</p>
 
 ---
 
@@ -31,7 +48,8 @@
 | **Kinematic Model** | Differential-drive unicycle ($L=0.60\,\text{m}, r=0.16\,\text{m}$), 4th-Order Runge-Kutta ODE solvers |
 | **Privacy Pipeline** | Real depth-only aperture extractor (RGB dropped immediately; 0 images written; 0 frames sent to cloud) |
 | **Clinical Ledger** | Event tracking (`near_miss`, `scrape`, `collision`), independence metrics, and modeled repair costs |
-| **Software Stack** | Python (FastAPI, NumPy, Pillow, Pytest), Streamlit cockpit dashboard, MATLAB 3D physical world |
+| **Software Stack** | Python (FastAPI, NumPy, Pillow, Pytest), React 19, Vite, Three.js (@react-three/fiber), TypeScript, Tailwind CSS |
+| **Single-Port Serving** | `python run.py` serves both REST APIs and the React SPA on `http://localhost:8000` |
 | **License** | [MIT License](LICENSE) |
 
 ---
@@ -229,12 +247,13 @@ Implemented in `backend/ledger.py` and exposed via `/api/v1/ledger/*`:
 Based on the Git commit history and technical evolution:
 
 * **Decoupled Nemotron from the Real-Time Control Loop** (`feat(nebius)`): Removed LLM inference from sub-50ms steering commands. Shifted NVIDIA Nemotron to asynchronous voice command compilation, caregiver incident narration, and full API audit logging.
+* **Modern Single-Port React 19 + Three.js Web App** (`feat(web)`): Replaced legacy Streamlit/MATLAB prototypes with a clean, light-mode, responsive web application (`/web`) featuring an interactive 3D digital twin room, real-time trajectory scrubbers, dynamic Monte Carlo stat cards, caregiver privacy receipts, and an empirical N=1000 evidence dossier. Unified on a single port via `python run.py` (FastAPI `StaticFiles`).
 * **Honest Corrective Human Baseline** (`feat(sim)`): Introduced a closed-loop human driver model featuring visual reaction delays (0.2–0.6s), visual-feedback gain, hand tremors, joystick noise, and cumulative neuromuscular fatigue.
 * **Reproducible Monte Carlo Suite with Wilson CIs** (`feat(eval)`): Built `scripts/monte_carlo.py` to evaluate 3 conditions across 5 doorway widths with rigorous 95% Wilson score confidence intervals and limitation logging.
 * **Real Depth-Only Privacy Filter** (`feat(privacy)`): Replaced mock token generators with a real depth array and 16-bit PNG parser that immediately drops RGB in-memory and outputs only 4 scalar doorway features with verified audit counters (0 disk writes, 0 cloud frames).
 * **Regional Standards Integration via Tavily** (`feat(standards)`): Added a regional parameter to Tavily search (US, UK, EU, AU, CA, GLOBAL) with automated regex width parsing and verified cached catalog fallbacks.
 * **Mobility Safety & Independence Ledger** (`feat(ledger)`): Created an in-memory event logger and metric engine calculating user independence ratios, assisted duration, corrections saved, and modeled repair savings with labeled assumptions.
-* **Codebase Pruning & Focus** (`chore(cleanup)`): Removed obsolete robot-arm modules and duplicate scripts (`docs/ggu`, `tests/bjh`, `simulation/app.py`), focusing the repository squarely on shared-autonomy mobility copilot navigation.
+* **Codebase Pruning & Legacy Archive** (`chore(cleanup)`): Removed obsolete robot-arm code and archived legacy Streamlit and MATLAB prototypes into `/legacy`, focusing the repository squarely on shared-autonomy mobility copilot navigation.
 
 ---
 
@@ -266,25 +285,28 @@ TAVILY_API_KEY=tvly-your_tavily_key_here
 ```
 > *Note: If API keys are omitted or left as placeholders, WAYLO operates cleanly with verified deterministic fallbacks.*
 
-### Step 3: Run the FastAPI Middleware Server
+### Step 3: Run the Single-Port Unified Application
 ```bash
-python backend/main.py
+python run.py
 ```
-* Server runs at `http://localhost:8000`.
-* Interactive OpenAPI Documentation: `http://localhost:8000/docs`.
+* **Web Application & 3D Twin**: Navigate to **`http://localhost:8000`** in your browser.
+* **Interactive OpenAPI Documentation**: `http://localhost:8000/docs`.
+* **Single-Port Architecture**: FastAPI automatically hosts all REST endpoints (`/api/*`) and serves the pre-built React 19 + Three.js application from `web/dist` on port 8000. No separate dev server or proxy needed.
 
-### Step 4: Run the Dark-Mode Streamlit Dashboard
-```bash
-streamlit run simulation_streamlit/app.py
-```
-* Dashboard runs at `http://localhost:8501`.
+*(Optional: Legacy Streamlit and MATLAB dashboards are archived in `/legacy` for reference).*
 
-### Step 5: Run Automated Verification Tests
+### Step 4: Run Automated Verification Tests
 ```bash
+# Python Backend Test Suite (75 passed)
 python -m pytest -q
+
+# Web Frontend Smoke Tests (5 Vitest passed)
+cd web
+npm test
 ```
 ```text
-67 passed in 4.56s
+75 passed in 4.26s
+5 passed in 3.66s
 ```
 
 ---

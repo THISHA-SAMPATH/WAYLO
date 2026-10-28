@@ -89,87 +89,96 @@ export const StandardsSection: React.FC<StandardsSectionProps> = ({ onApplyDoorW
           <div className="h-48 rounded-2xl bg-[#F4F2EC] animate-pulse flex items-center justify-center text-xs text-[#5B6B63]">
             Querying accessibility regulatory database...
           </div>
-        ) : data ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Left Column: Metrics & Standard Code (5 cols) */}
-            <div className="lg:col-span-5 p-6 rounded-2xl bg-[#F4F2EC] border border-[#14201B]/5 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-[#17352B] text-white">
-                  {data.standard_code}
-                </span>
+        ) : data ? (() => {
+          const minWidth = data.min_doorway_width_m ?? data.door_width_min_m ?? data.standard_specs?.doorway?.min_width_meters ?? 0.813
+          const recClearance = data.clearance_recommended_m ?? (minWidth + 0.05)
+          const standardCode = data.standard_code ?? data.standard_specs?.doorway?.standard_code ?? `${selectedRegion} Accessibility Standard`
+          const title = data.title ?? `Doorway Dimension Mandate (${data.region || selectedRegion})`
+          const content = data.content ?? data.standards_context ?? data.standard_specs?.doorway?.guideline ?? 'Door opening clearance required for standard accessibility.'
+          const sourceUrl = data.url || 'https://www.ada.gov'
 
-                {/* Source Badge */}
-                <span
-                  id="standards-source-badge"
-                  className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
-                    isLive
-                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                      : 'bg-amber-50 text-amber-900 border-amber-300'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                  <span>{isLive ? 'Live (Tavily search)' : 'Cached fallback'}</span>
-                </span>
-              </div>
-
-              <div>
-                <p className="text-xs text-[#5B6B63] uppercase font-semibold">Statutory Minimum Width</p>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-4xl font-extrabold text-[#17352B] tracking-tight font-mono">
-                    {data.door_width_min_m.toFixed(3)} m
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              {/* Left Column: Metrics & Standard Code (5 cols) */}
+              <div className="lg:col-span-5 p-6 rounded-2xl bg-[#F4F2EC] border border-[#14201B]/5 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-[#17352B] text-white">
+                    {standardCode}
                   </span>
-                  <span className="text-sm text-[#5B6B63]">
-                    ({(data.door_width_min_m * 39.3701).toFixed(1)} inches)
+
+                  {/* Source Badge */}
+                  <span
+                    id="standards-source-badge"
+                    className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
+                      isLive
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                        : 'bg-amber-50 text-amber-900 border-amber-300'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                    <span>{isLive ? 'Live (Tavily search)' : 'Cached fallback'}</span>
                   </span>
                 </div>
-              </div>
 
-              <div>
-                <p className="text-xs text-[#5B6B63] uppercase font-semibold">Recommended Comfortable Clearance</p>
-                <p className="text-xl font-bold text-[#14201B] font-mono mt-0.5">
-                  {data.clearance_recommended_m.toFixed(2)} m
-                </p>
-              </div>
+                <div>
+                  <p className="text-xs text-[#5B6B63] uppercase font-semibold">Statutory Minimum Width</p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-4xl font-extrabold text-[#17352B] tracking-tight font-mono">
+                      {minWidth.toFixed(3)} m
+                    </span>
+                    <span className="text-sm text-[#5B6B63]">
+                      ({(minWidth * 39.3701).toFixed(1)} inches)
+                    </span>
+                  </div>
+                </div>
 
-              {onApplyDoorWidth && (
-                <button
-                  onClick={() => onApplyDoorWidth(data.door_width_min_m)}
-                  className="w-full mt-2 py-3 rounded-xl bg-white border border-[#14201B]/15 hover:bg-[#E3F26D]/30 text-xs font-bold text-[#14201B] flex items-center justify-center gap-2 transition min-h-[44px]"
-                >
-                  <span>Test this standard in 3D simulator</span>
-                  <ArrowUpRight className="w-4 h-4 text-[#17352B]" />
-                </button>
-              )}
-            </div>
+                <div>
+                  <p className="text-xs text-[#5B6B63] uppercase font-semibold">Recommended Comfortable Clearance</p>
+                  <p className="text-xl font-bold text-[#14201B] font-mono mt-0.5">
+                    {recClearance.toFixed(2)} m
+                  </p>
+                </div>
 
-            {/* Right Column: Regulatory Guidance Excerpt (7 cols) */}
-            <div className="lg:col-span-7 space-y-4">
-              <h3 className="text-xl font-bold text-[#14201B] flex items-center gap-2">
-                <Bookmark className="w-5 h-5 text-[#F26B3A]" />
-                <span>{data.title}</span>
-              </h3>
-
-              <div className="p-5 rounded-2xl bg-[#F4F2EC]/60 border border-[#14201B]/10 text-sm text-[#14201B] leading-relaxed">
-                "{data.content}"
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-[#5B6B63] pt-2">
-                <span>Jurisdiction: {data.region} regulatory baseline</span>
-                {data.url && (
-                  <a
-                    href={data.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[#17352B] hover:underline font-semibold flex items-center gap-1 min-h-[36px]"
+                {onApplyDoorWidth && (
+                  <button
+                    onClick={() => onApplyDoorWidth(minWidth)}
+                    className="w-full mt-2 py-3 rounded-xl bg-white border border-[#14201B]/15 hover:bg-[#E3F26D]/30 text-xs font-bold text-[#14201B] flex items-center justify-center gap-2 transition min-h-[44px]"
                   >
-                    <span>Official Standard Source</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                    <span>Test this standard in 3D simulator</span>
+                    <ArrowUpRight className="w-4 h-4 text-[#17352B]" />
+                  </button>
                 )}
               </div>
+
+              {/* Right Column: Regulatory Guidance Excerpt (7 cols) */}
+              <div className="lg:col-span-7 space-y-4">
+                <h3 className="text-xl font-bold text-[#14201B] flex items-center gap-2">
+                  <Bookmark className="w-5 h-5 text-[#F26B3A]" />
+                  <span>{title}</span>
+                </h3>
+
+                <div className="p-5 rounded-2xl bg-[#F4F2EC]/60 border border-[#14201B]/10 text-sm text-[#14201B] leading-relaxed">
+                  "{content}"
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-[#5B6B63] pt-2">
+                  <span>Jurisdiction: {data.region || selectedRegion} regulatory baseline</span>
+                  {sourceUrl && (
+                    <a
+                      href={sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#17352B] hover:underline font-semibold flex items-center gap-1 min-h-[36px]"
+                    >
+                      <span>Official Standard Source</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ) : (
+          )
+        })() : (
           <p className="text-sm text-[#5B6B63]">Select a region above to query doorway standards.</p>
         )}
       </div>

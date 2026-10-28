@@ -62,8 +62,8 @@ export const LiveDemo: React.FC = () => {
     if (!isPlaying || !simData) return
 
     const maxSteps = Math.max(
-      simData.waylo.trajectory.length,
-      simData.unassisted.trajectory.length
+      simData.waylo?.trajectory?.length || 0,
+      simData.unassisted?.trajectory?.length || 0
     )
 
     playTimerRef.current = window.setInterval(() => {
@@ -96,7 +96,9 @@ export const LiveDemo: React.FC = () => {
   }
 
   const currentWayloPoint: TrajectoryPoint | undefined =
-    simData?.waylo.trajectory[Math.min(stepIndex, simData.waylo.trajectory.length - 1)]
+    simData?.waylo?.trajectory && simData.waylo.trajectory.length > 0
+      ? simData.waylo.trajectory[Math.min(stepIndex, simData.waylo.trajectory.length - 1)]
+      : undefined
 
   return (
     <section id="demo" className="py-16 md:py-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -149,8 +151,8 @@ export const LiveDemo: React.FC = () => {
           <ThreeScene
             viewMode={viewMode}
             doorWidthM={doorWidthM}
-            unassistedPath={simData?.unassisted.trajectory || []}
-            wayloPath={simData?.waylo.trajectory || []}
+            unassistedPath={simData?.unassisted?.trajectory || []}
+            wayloPath={simData?.waylo?.trajectory || []}
             currentStepIndex={stepIndex}
             showUnassisted={showUnassisted}
             showWaylo={showWaylo}
@@ -216,8 +218,8 @@ export const LiveDemo: React.FC = () => {
               max={
                 simData
                   ? Math.max(
-                      simData.waylo.trajectory.length - 1,
-                      simData.unassisted.trajectory.length - 1
+                      (simData.waylo?.trajectory?.length || 1) - 1,
+                      (simData.unassisted?.trajectory?.length || 1) - 1
                     )
                   : 50
               }
@@ -433,7 +435,7 @@ export const LiveDemo: React.FC = () => {
               )}
             </div>
             <p className="text-2xl font-bold font-mono">
-              {(simData.unassisted.summary.min_clearance_m * 100).toFixed(1)} cm
+              {((simData.unassisted.summary.min_clearance_m ?? 0) * 100).toFixed(1)} cm
             </p>
             <p className="text-xs text-[#5B6B63] mt-1">
               Minimum post clearance ({simData.unassisted.summary.scrape_count || 0} scrapes)
@@ -449,10 +451,10 @@ export const LiveDemo: React.FC = () => {
               </span>
             </div>
             <p className="text-2xl font-bold font-mono text-white">
-              +{(simData.waylo.summary.min_clearance_m * 100).toFixed(1)} cm
+              +{((simData.waylo.summary.min_clearance_m ?? 0) * 100).toFixed(1)} cm
             </p>
             <p className="text-xs text-white/70 mt-1">
-              Peak blend α: {(simData.waylo.summary.peak_alpha * 100).toFixed(0)}% intervention
+              Peak blend α: {((simData.waylo.summary.peak_alpha ?? 0) * 100).toFixed(0)}% intervention
             </p>
           </div>
 

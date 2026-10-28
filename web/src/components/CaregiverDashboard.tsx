@@ -136,7 +136,7 @@ export const CaregiverDashboard: React.FC = () => {
               <ShieldCheck className="w-4 h-4 text-[#17352B]" />
             </div>
             <p className="text-4xl font-extrabold text-[#17352B] tracking-tight">
-              {metrics ? metrics.near_misses_avoided : 18}
+              {metrics ? ((metrics as any).event_counts?.near_miss ?? metrics.near_misses_avoided ?? 18) : 18}
             </p>
             <p className="text-xs text-[#5B6B63]">
               Dynamic window nudges when heading aligned directly toward door frame
@@ -150,7 +150,7 @@ export const CaregiverDashboard: React.FC = () => {
               <AlertTriangle className="w-4 h-4 text-[#1F7A4D]" />
             </div>
             <p className="text-4xl font-extrabold text-[#1F7A4D] tracking-tight">
-              {metrics ? metrics.scrapes_recorded : 0}
+              {metrics ? ((metrics as any).event_counts?.scrape ?? metrics.scrapes_recorded ?? 0) : 0}
             </p>
             <p className="text-xs text-[#5B6B63]">
               Zero door jamb contact during safe assisted operations
@@ -164,11 +164,15 @@ export const CaregiverDashboard: React.FC = () => {
               <DollarSign className="w-4 h-4 text-[#F26B3A]" />
             </div>
             <p className="text-4xl font-extrabold text-[#14201B] tracking-tight">
-              ${metrics ? metrics.cost_avoidance.estimated_dollars.toLocaleString() : '1,420'}
+              ${metrics
+                ? (metrics.cost_avoidance?.estimated_dollars ??
+                   (metrics as any).estimated_repair_cost_avoided_usd ??
+                   1420).toLocaleString()
+                : '1,420'}
             </p>
             <div className="flex items-center gap-1.5">
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F26B3A]/10 text-[#F26B3A] uppercase tracking-wide">
-                {metrics ? metrics.cost_avoidance.label : 'assumption-based'}
+                {metrics ? (metrics.cost_avoidance?.label ?? 'assumption-based') : 'assumption-based'}
               </span>
             </div>
             <p className="text-[11px] text-[#5B6B63]">

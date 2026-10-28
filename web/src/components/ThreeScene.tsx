@@ -37,7 +37,7 @@ const RoomEnvironment: React.FC<{
 
       {/* Grid lines */}
       <gridHelper
-        args={[16, 32, isAI ? '#1F7A4D' : '#14201B20', isAI ? '#14201B40' : '#14201B10']}
+        args={[16, 32, isAI ? '#1F7A4D' : '#8A9991', isAI ? '#1A3326' : '#D0CBC0']}
         position={[0, 0.005, -4.5]}
       />
 
@@ -237,11 +237,11 @@ const WheelchairModel: React.FC<{
 export const ThreeScene: React.FC<ThreeSceneProps> = ({
   viewMode,
   doorWidthM,
-  unassistedPath,
-  wayloPath,
-  currentStepIndex,
-  showUnassisted,
-  showWaylo,
+  unassistedPath = [],
+  wayloPath = [],
+  currentStepIndex = 0,
+  showUnassisted = true,
+  showWaylo = true,
 }) => {
   const currentWayloPoint =
     wayloPath && wayloPath.length > 0
@@ -273,10 +273,10 @@ export const ThreeScene: React.FC<ThreeSceneProps> = ({
 
         <RoomEnvironment viewMode={viewMode} doorWidthM={doorWidthM} />
 
-        {showUnassisted && unassistedPath.length > 0 && (
+        {showUnassisted && unassistedPath && unassistedPath.length > 0 && (
           <PathTrail points={unassistedPath} color="#C2410C" dashed={true} />
         )}
-        {showWaylo && wayloPath.length > 0 && (
+        {showWaylo && wayloPath && wayloPath.length > 0 && (
           <PathTrail points={wayloPath} color="#1F7A4D" dashed={false} />
         )}
 
