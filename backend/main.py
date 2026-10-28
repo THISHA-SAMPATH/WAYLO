@@ -35,6 +35,7 @@ try:
     )
     from .tavily_search import fetch_accessibility_context, fetch_regional_doorway_spec, get_standard_specs
     from .privacy_scrubber import anonymize_spatial_feed
+    from .ledger import get_global_ledger, VALID_EVENT_TYPES
     from . import core, perception, simulation
 except (ImportError, ValueError):
     from backend.nebius_client import (
@@ -50,6 +51,7 @@ except (ImportError, ValueError):
     )
     from backend.tavily_search import fetch_accessibility_context, fetch_regional_doorway_spec, get_standard_specs
     from backend.privacy_scrubber import anonymize_spatial_feed
+    from backend.ledger import get_global_ledger, VALID_EVENT_TYPES
     from backend import core, perception, simulation
 
 
@@ -270,6 +272,11 @@ class VoiceCommandRequest(BaseModel):
 class IncidentNarrationRequest(BaseModel):
     event: Dict[str, Any] = Field(..., description="Sanitized mobility event telemetry dictionary")
 
+class LedgerEventRequest(BaseModel):
+    event_type: str = Field(..., description="One of: assist_engaged, near_miss, scrape, collision, human_rescue")
+    timestamp_s: Optional[float] = Field(default=None, description="Event timestamp in seconds")
+    details: Optional[Dict[str, Any]] = Field(default=None, description="Optional telemetry metadata")
+
 # ==============================================================================
 # API Endpoints
 # ==============================================================================
@@ -291,6 +298,9 @@ def root_overview():
             "voice_command": "/api/v1/voice-command",
             "narrate_incident": "/api/v1/narrate-incident",
             "nebius_audit": "/api/nebius/audit",
+            "ledger_events": "/api/v1/ledger/events",
+            "ledger_metrics": "/api/v1/ledger/metrics",
+            "ledger_reset": "/api/v1/ledger/reset",
             "spatial_analyze": "/api/spatial/analyze",
             "kinematics_blend": "/api/kinematics/blend",
             "accessibility_search": "/api/accessibility/search",
@@ -350,6 +360,46 @@ def narrate_incident_endpoint(req: IncidentNarrationRequest):
     Produces plain-English caregiver summary for a mobility event using only sanitized fields.
     """
     return narrate_incident(sanitized_event=req.event)
+
+# --- Ledger Endpoints ---
+@app.get("/api/v1/ledger/events", summary="Get Mobility Ledger Events", tags=["Ledger"])
+def ledger_events_endpoint():
+    """Returns all recorded mobility events from the ledger."""
+    ledger = get_global_ledger()
+    return {"status": "SUCCESS", "total_events": len(ledger.events), "events": ledger.events}
+
+@app.post("/api/v1/ledger/event", summary="Log Mobility Event to Ledger", tags=["Ledger"])
+def ledger_log_event_endpoint(req: LedgerEventRequest):
+    """Logs a single event (assist_engaged, near_miss, scrape, collision, human_rescue)."""
+    ledger = get_global_ledger()
+    record = ledger.log_event(event_type=req.event_type, timestamp_s=req.timestamp_s, details=req.details)
+    return {"status": "SUCCESS", "event": record}
+
+@app.get("/api/v1/ledger/metrics", summary="Get Cumulative Mobility Metrics", tags=["Ledger"])
+def ledger_metrics_endpoint(
+    collision_cost_usd: Optional[float] = None,
+    scrape_cost_usd: Optional[float] = None
+):
+    """
+    Computes independence ratio, assisted time, corrections saved, and estimated repair cost avoided.
+    Cost assumptions are fully configurable and labeled as assumptions.
+    """
+    ledger = get_global_ledger()
+    custom_assumptions = None
+    if collision_cost_usd is not None or scrape_cost_usd is not None:
+        custom_assumptions = dict(ledger.cost_assumptions)
+        if collision_cost_usd is not None:
+            custom_assumptions["collision_repair_cost_usd"] = collision_cost_usd
+        if scrape_cost_usd is not None:
+            custom_assumptions["scrape_repair_cost_usd"] = scrape_cost_usd
+    return ledger.compute_metrics(cost_assumptions=custom_assumptions)
+
+@app.post("/api/v1/ledger/reset", summary="Reset Mobility Ledger", tags=["Ledger"])
+def ledger_reset_endpoint():
+    """Clears all logged events and resets metrics."""
+    ledger = get_global_ledger()
+    ledger.clear()
+    return {"status": "SUCCESS", "message": "Mobility ledger reset successfully"}
 
 @app.post(
     "/api/v1/copilot-step",
