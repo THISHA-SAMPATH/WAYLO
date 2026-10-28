@@ -54,8 +54,33 @@ def door_clearance(room, x, y, phi) -> Optional[float]:
     return float(room.door_width / 2 - np.max(np.abs(p[inside, 0])))
 
 
-def run(assist: bool, drift_deg: float = 14.0, speed_mps: float = 0.85, door_width_m: float = 1.4,
-        tremor_deg: float = 2.0, duration_s: float = 9.0, seed: int = 7) -> dict:
+def run(assist_or_mode: bool | str = False, drift_deg: float = 14.0, speed_mps: float = 0.85, door_width_m: float = 1.4,
+        tremor_deg: float = 2.0, duration_s: float = 9.0, seed: int = 7,
+        reaction_delay_s: float = 0.35, visual_gain: float = 1.2, joystick_noise_deg: float = 1.0,
+        fatigue_rate: float = 0.05, driver_model: Optional[str] = None) -> dict:
+    if isinstance(assist_or_mode, str):
+        norm = assist_or_mode.strip().lower()
+        if norm in ("waylo", "assist", "assisted"):
+            assist = True
+            driver = driver_model or "corrective"
+            mode_name = "waylo"
+        elif norm in ("corrective", "human_corrective"):
+            assist = False
+            driver = driver_model or "corrective"
+            mode_name = "corrective"
+        else:
+            assist = False
+            driver = driver_model or "uncorrected"
+            mode_name = "uncorrected"
+    else:
+        assist = bool(assist_or_mode)
+        if assist:
+            driver = driver_model or "corrective"
+            mode_name = "waylo"
+        else:
+            driver = driver_model or "uncorrected"
+            mode_name = "uncorrected"
+
     room = build_room(door_width_m)
     rng = np.random.default_rng(seed)
     tremor_phase = rng.uniform(0, 2 * math.pi)
@@ -67,9 +92,46 @@ def run(assist: bool, drift_deg: float = 14.0, speed_mps: float = 0.85, door_wid
     collision_t, min_door_clear, x_at_door, stopped = None, None, None, False
     prev_y = y
 
+    # Buffer for human visual-motor reaction delay
+    history = []
+    delay_steps = max(1, int(round(reaction_delay_s / DT)))
+
     for k in range(int(duration_s / DT)):
         t = k * DT
-        phi_user = math.radians(drift_deg + tremor_deg * math.sin(2 * math.pi * 4.5 * t + tremor_phase))
+        history.append((x, y, phi))
+
+        if driver == "uncorrected":
+            # Constant drift with hand tremor
+            phi_user = math.radians(drift_deg + tremor_deg * math.sin(2 * math.pi * 4.5 * t + tremor_phase))
+        else:
+            # Corrective human model:
+            # 1. Delayed visual perception
+            delayed_idx = max(0, k - delay_steps)
+            x_del, y_del, phi_del = history[delayed_idx]
+
+            # 2. Visual aiming toward doorway center (x=0, y=DOOR_Y)
+            dx_target = 0.0 - x_del
+            dy_target = DOOR_Y - y_del
+            if dy_target > -0.2:
+                aim_angle = math.atan2(dx_target, max(dy_target, 0.3))
+                angle_error = aim_angle - phi_del
+                phi_intent = phi_del + visual_gain * angle_error
+            else:
+                phi_intent = phi_del
+
+            # 3. Fatigue term increasing heading drift error over time
+            fatigue_mult = 1.0 + fatigue_rate * t
+            effective_drift = drift_deg * fatigue_mult
+
+            # 4. Hand tremor
+            tremor = tremor_deg * math.sin(2 * math.pi * 4.5 * t + tremor_phase)
+
+            # 5. Sensor / joystick noise (zero if tremor_deg is 0 for disturbance-free test baselines)
+            noise = float(rng.normal(0.0, joystick_noise_deg)) if tremor_deg > 0 else 0.0
+
+            heading_error_deg = effective_drift + tremor + noise
+            phi_user = phi_intent + math.radians(heading_error_deg)
+
         v_user = speed_mps
         risk, clear_l, clear_r, fr, aeb, a_tgt = 0.0, 9.0, 9.0, 9.0, False, 0.0
 
@@ -133,6 +195,7 @@ def run(assist: bool, drift_deg: float = 14.0, speed_mps: float = 0.85, door_wid
     out = {k: np.array(v) for k, v in rec.items()}
     out["summary"] = {
         "assist": assist,
+        "mode": mode_name,
         "collision": collision_t is not None,
         "collision_time_s": collision_t,
         "passed_door": bool(y > DOOR_Y + WALL_THICKNESS + CHAIR_LENGTH_M / 2) and collision_t is None,
@@ -146,5 +209,16 @@ def run(assist: bool, drift_deg: float = 14.0, speed_mps: float = 0.85, door_wid
 
 
 def compare(**kw) -> dict:
-    """Run unassisted and assisted simulations with identical driver input."""
-    return {"unassisted": run(False, **kw), "waylo": run(True, **kw), "params": kw}
+    """Run uncorrected, corrective, and waylo simulations with identical random seeds."""
+    seed = kw.get("seed", 7)
+    kw_seed = {**kw, "seed": seed}
+    uncorr = run("uncorrected", **kw_seed)
+    corr = run("corrective", **kw_seed)
+    waylo = run("waylo", **kw_seed)
+    return {
+        "uncorrected": uncorr,
+        "unassisted": uncorr,
+        "corrective": corr,
+        "waylo": waylo,
+        "params": kw
+    }

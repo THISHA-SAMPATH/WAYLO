@@ -36,3 +36,26 @@ def test_same_driver_input_for_both_runs():
 def test_alpha_stays_in_range():
     r = sim.run(True, drift_deg=20)
     assert r["alpha"].min() >= 0.0 and r["alpha"].max() <= 1.0
+
+
+def test_compare_returns_all_three_conditions_with_identical_seeds():
+    res = sim.compare(drift_deg=12.0, seed=42)
+    assert "uncorrected" in res
+    assert "corrective" in res
+    assert "waylo" in res
+    assert res["unassisted"]["summary"]["mode"] == "uncorrected"
+    assert res["corrective"]["summary"]["mode"] == "corrective"
+    assert res["waylo"]["summary"]["mode"] == "waylo"
+    # Timing and time steps match identically
+    assert res["uncorrected"]["t"][1] == res["corrective"]["t"][1] == res["waylo"]["t"][1]
+
+
+def test_corrective_human_attempts_visual_recovery():
+    # Moderate drift in wide door: corrective human steers back toward doorway
+    res = sim.compare(drift_deg=8.0, door_width_m=1.4, seed=10)
+    # Both corrective and waylo can pass in a generous 1.4m door with small drift
+    assert res["waylo"]["summary"]["passed_door"]
+    assert res["corrective"]["summary"]["passed_door"]
+    # But uncorrected collides due to pure open-loop drift
+    assert res["uncorrected"]["summary"]["collision"]
+
