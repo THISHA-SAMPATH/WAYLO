@@ -1,0 +1,451 @@
+{
+  "metadata": {
+    "n_trials": 100,
+    "master_seed": 42,
+    "door_widths": [
+      0.81,
+      0.91,
+      1.0,
+      1.1,
+      1.4
+    ],
+    "conditions": [
+      "uncorrected",
+      "corrective",
+      "waylo"
+    ]
+  },
+  "overall": {
+    "uncorrected": {
+      "total_runs": 100,
+      "collision_count": 84,
+      "collision_rate": 0.84,
+      "collision_ci_95": [
+        0.7558,
+        0.899
+      ],
+      "pass_count": 16,
+      "pass_rate": 0.16,
+      "pass_ci_95": [
+        0.101,
+        0.2442
+      ],
+      "min_door_clearance": {
+        "mean": -0.2868,
+        "std": 0.2872,
+        "median": -0.214,
+        "ci_lower": -0.3431,
+        "ci_upper": -0.2305,
+        "count": 100
+      }
+    },
+    "corrective": {
+      "total_runs": 100,
+      "collision_count": 66,
+      "collision_rate": 0.66,
+      "collision_ci_95": [
+        0.5628,
+        0.7454
+      ],
+      "pass_count": 34,
+      "pass_rate": 0.34,
+      "pass_ci_95": [
+        0.2546,
+        0.4372
+      ],
+      "min_door_clearance": {
+        "mean": -0.0958,
+        "std": 0.2227,
+        "median": -0.12,
+        "ci_lower": -0.1394,
+        "ci_upper": -0.0521,
+        "count": 100
+      }
+    },
+    "waylo": {
+      "total_runs": 100,
+      "collision_count": 0,
+      "collision_rate": 0.0,
+      "collision_ci_95": [
+        0.0,
+        0.037
+      ],
+      "pass_count": 100,
+      "pass_rate": 1.0,
+      "pass_ci_95": [
+        0.963,
+        1.0
+      ],
+      "min_door_clearance": {
+        "mean": 0.1123,
+        "std": 0.1051,
+        "median": 0.071,
+        "ci_lower": 0.0917,
+        "ci_upper": 0.1329,
+        "count": 100
+      }
+    }
+  },
+  "by_door_width": {
+    "0.81": {
+      "uncorrected": {
+        "total_runs": 15,
+        "collision_count": 15,
+        "collision_rate": 1.0,
+        "collision_ci_95": [
+          0.7961,
+          1.0
+        ],
+        "pass_count": 0,
+        "pass_rate": 0.0,
+        "pass_ci_95": [
+          0.0,
+          0.2039
+        ],
+        "min_door_clearance": {
+          "mean": -0.3929,
+          "std": 0.2133,
+          "median": -0.281,
+          "ci_lower": -0.5009,
+          "ci_upper": -0.285,
+          "count": 15
+        }
+      },
+      "corrective": {
+        "total_runs": 15,
+        "collision_count": 15,
+        "collision_rate": 1.0,
+        "collision_ci_95": [
+          0.7961,
+          1.0
+        ],
+        "pass_count": 0,
+        "pass_rate": 0.0,
+        "pass_ci_95": [
+          0.0,
+          0.2039
+        ],
+        "min_door_clearance": {
+          "mean": -0.2436,
+          "std": 0.1256,
+          "median": -0.266,
+          "ci_lower": -0.3072,
+          "ci_upper": -0.18,
+          "count": 15
+        }
+      },
+      "waylo": {
+        "total_runs": 15,
+        "collision_count": 0,
+        "collision_rate": 0.0,
+        "collision_ci_95": [
+          0.0,
+          0.2039
+        ],
+        "pass_count": 15,
+        "pass_rate": 1.0,
+        "pass_ci_95": [
+          0.7961,
+          1.0
+        ],
+        "min_door_clearance": {
+          "mean": 0.0131,
+          "std": 0.012,
+          "median": 0.007,
+          "ci_lower": 0.007,
+          "ci_upper": 0.0191,
+          "count": 15
+        }
+      }
+    },
+    "0.91": {
+      "uncorrected": {
+        "total_runs": 31,
+        "collision_count": 28,
+        "collision_rate": 0.9032,
+        "collision_ci_95": [
+          0.751,
+          0.9665
+        ],
+        "pass_count": 3,
+        "pass_rate": 0.0968,
+        "pass_ci_95": [
+          0.0335,
+          0.249
+        ],
+        "min_door_clearance": {
+          "mean": -0.3303,
+          "std": 0.2672,
+          "median": -0.284,
+          "ci_lower": -0.4243,
+          "ci_upper": -0.2362,
+          "count": 31
+        }
+      },
+      "corrective": {
+        "total_runs": 31,
+        "collision_count": 25,
+        "collision_rate": 0.8065,
+        "collision_ci_95": [
+          0.6372,
+          0.9081
+        ],
+        "pass_count": 6,
+        "pass_rate": 0.1935,
+        "pass_ci_95": [
+          0.0919,
+          0.3628
+        ],
+        "min_door_clearance": {
+          "mean": -0.1695,
+          "std": 0.1713,
+          "median": -0.17,
+          "ci_lower": -0.2297,
+          "ci_upper": -0.1092,
+          "count": 31
+        }
+      },
+      "waylo": {
+        "total_runs": 31,
+        "collision_count": 0,
+        "collision_rate": 0.0,
+        "collision_ci_95": [
+          0.0,
+          0.1103
+        ],
+        "pass_count": 31,
+        "pass_rate": 1.0,
+        "pass_ci_95": [
+          0.8897,
+          1.0
+        ],
+        "min_door_clearance": {
+          "mean": 0.0503,
+          "std": 0.031,
+          "median": 0.045,
+          "ci_lower": 0.0394,
+          "ci_upper": 0.0612,
+          "count": 31
+        }
+      }
+    },
+    "1.00": {
+      "uncorrected": {
+        "total_runs": 17,
+        "collision_count": 16,
+        "collision_rate": 0.9412,
+        "collision_ci_95": [
+          0.7302,
+          0.9895
+        ],
+        "pass_count": 1,
+        "pass_rate": 0.0588,
+        "pass_ci_95": [
+          0.0105,
+          0.2698
+        ],
+        "min_door_clearance": {
+          "mean": -0.4142,
+          "std": 0.3161,
+          "median": -0.214,
+          "ci_lower": -0.5644,
+          "ci_upper": -0.2639,
+          "count": 17
+        }
+      },
+      "corrective": {
+        "total_runs": 17,
+        "collision_count": 14,
+        "collision_rate": 0.8235,
+        "collision_ci_95": [
+          0.5897,
+          0.9381
+        ],
+        "pass_count": 3,
+        "pass_rate": 0.1765,
+        "pass_ci_95": [
+          0.0619,
+          0.4103
+        ],
+        "min_door_clearance": {
+          "mean": -0.1913,
+          "std": 0.1825,
+          "median": -0.153,
+          "ci_lower": -0.278,
+          "ci_upper": -0.1046,
+          "count": 17
+        }
+      },
+      "waylo": {
+        "total_runs": 17,
+        "collision_count": 0,
+        "collision_rate": 0.0,
+        "collision_ci_95": [
+          0.0,
+          0.1843
+        ],
+        "pass_count": 17,
+        "pass_rate": 1.0,
+        "pass_ci_95": [
+          0.8157,
+          1.0
+        ],
+        "min_door_clearance": {
+          "mean": 0.0678,
+          "std": 0.0304,
+          "median": 0.057,
+          "ci_lower": 0.0534,
+          "ci_upper": 0.0823,
+          "count": 17
+        }
+      }
+    },
+    "1.10": {
+      "uncorrected": {
+        "total_runs": 17,
+        "collision_count": 12,
+        "collision_rate": 0.7059,
+        "collision_ci_95": [
+          0.4687,
+          0.8672
+        ],
+        "pass_count": 5,
+        "pass_rate": 0.2941,
+        "pass_ci_95": [
+          0.1328,
+          0.5313
+        ],
+        "min_door_clearance": {
+          "mean": -0.2391,
+          "std": 0.2753,
+          "median": -0.242,
+          "ci_lower": -0.3699,
+          "ci_upper": -0.1082,
+          "count": 17
+        }
+      },
+      "corrective": {
+        "total_runs": 17,
+        "collision_count": 8,
+        "collision_rate": 0.4706,
+        "collision_ci_95": [
+          0.2617,
+          0.6904
+        ],
+        "pass_count": 9,
+        "pass_rate": 0.5294,
+        "pass_ci_95": [
+          0.3096,
+          0.7383
+        ],
+        "min_door_clearance": {
+          "mean": -0.0429,
+          "std": 0.1999,
+          "median": 0.02,
+          "ci_lower": -0.1379,
+          "ci_upper": 0.0521,
+          "count": 17
+        }
+      },
+      "waylo": {
+        "total_runs": 17,
+        "collision_count": 0,
+        "collision_rate": 0.0,
+        "collision_ci_95": [
+          0.0,
+          0.1843
+        ],
+        "pass_count": 17,
+        "pass_rate": 1.0,
+        "pass_ci_95": [
+          0.8157,
+          1.0
+        ],
+        "min_door_clearance": {
+          "mean": 0.1407,
+          "std": 0.0432,
+          "median": 0.135,
+          "ci_lower": 0.1202,
+          "ci_upper": 0.1612,
+          "count": 17
+        }
+      }
+    },
+    "1.40": {
+      "uncorrected": {
+        "total_runs": 20,
+        "collision_count": 13,
+        "collision_rate": 0.65,
+        "collision_ci_95": [
+          0.4329,
+          0.8188
+        ],
+        "pass_count": 7,
+        "pass_rate": 0.35,
+        "pass_ci_95": [
+          0.1812,
+          0.5671
+        ],
+        "min_door_clearance": {
+          "mean": -0.0721,
+          "std": 0.2417,
+          "median": -0.0755,
+          "ci_lower": -0.178,
+          "ci_upper": 0.0339,
+          "count": 20
+        }
+      },
+      "corrective": {
+        "total_runs": 20,
+        "collision_count": 4,
+        "collision_rate": 0.2,
+        "collision_ci_95": [
+          0.0807,
+          0.416
+        ],
+        "pass_count": 16,
+        "pass_rate": 0.8,
+        "pass_ci_95": [
+          0.584,
+          0.9193
+        ],
+        "min_door_clearance": {
+          "mean": 0.1656,
+          "std": 0.1732,
+          "median": 0.22,
+          "ci_lower": 0.0897,
+          "ci_upper": 0.2415,
+          "count": 20
+        }
+      },
+      "waylo": {
+        "total_runs": 20,
+        "collision_count": 0,
+        "collision_rate": 0.0,
+        "collision_ci_95": [
+          0.0,
+          0.1611
+        ],
+        "pass_count": 20,
+        "pass_rate": 1.0,
+        "pass_ci_95": [
+          0.8389,
+          1.0
+        ],
+        "min_door_clearance": {
+          "mean": 0.2968,
+          "std": 0.0346,
+          "median": 0.297,
+          "ci_lower": 0.2816,
+          "ci_upper": 0.3119,
+          "count": 20
+        }
+      }
+    }
+  },
+  "waylo_failure_cases": {
+    "count": 0,
+    "failure_rate": 0.0,
+    "cases": []
+  }
+}
