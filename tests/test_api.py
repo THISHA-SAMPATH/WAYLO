@@ -98,6 +98,35 @@ def test_matlab_telemetry_endpoint():
     assert data["status"] == "ACK"
     assert "blended_linear_vel" in data
     assert "left_wheel_speed" in data
+def test_voice_command_endpoint():
+    r = client.post("/api/v1/voice-command", json={"command": "Slow down for tight door"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert 0.2 <= data["speed_cap_mps"] <= 1.0
+    assert 0.05 <= data["clearance_margin_m"] <= 0.50
 
 
+def test_narrate_incident_endpoint():
+    event = {
+        "event_type": "near_miss",
+        "timestamp_s": 1.8,
+        "door_width_m": 0.81,
+        "clearance_m": 0.05,
+        "copilot_alpha": 0.80
+    }
+    r = client.post("/api/v1/narrate-incident", json={"event": event})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert "narrative" in data
+    assert len(data["narrative"]) > 10
 
+
+def test_nebius_audit_endpoint():
+    r = client.get("/api/nebius/audit")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "SUCCESS"
+    assert "calls" in data
+    assert isinstance(data["calls"], list)

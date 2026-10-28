@@ -1,23 +1,84 @@
-import os
-import re
+"""
+WAYLO: Nebius AI Studio Client (NVIDIA Nemotron).
+
+Handles non-control reasoning tasks via Nebius Token Factory (NVIDIA Nemotron):
+1. compile_voice_command: Compiles natural-language voice instructions into bounded configuration
+   parameters (speed_cap_mps in [0.2, 1.0], clearance_margin_m, door_mode), with the deterministic
+   safety layer as final authority.
+2. narrate_incident: Generates plain-English caregiver summaries from sanitized telemetry events.
+3. Audit logging: Logs every call (model, latency, tokens, source) to an audit log exposed by the API.
+
+Hard Constraint Architecture:
+The real-time control loop (perception -> alpha blending -> differential command) runs LOCALLY
+and NEVER calls the cloud. Clearance and alpha are computed deterministically by local core kinematics.
+"""
+
+from __future__ import annotations
+
 import json
 import math
+import os
+import re
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+from . import core
+
 load_dotenv()
 
 DEFAULT_NEBIUS_BASE_URL = os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
 DEFAULT_MODEL = os.getenv("NEBIUS_MODEL", "nvidia/nemotron-3-ultra")
 
+# In-memory audit trail of Nebius API calls
+_NEBIUS_AUDIT_LOG: List[Dict[str, Any]] = []
 
-def get_api_key(api_key: str | None = None) -> str | None:
+
+def get_api_key(api_key: Optional[str] = None) -> Optional[str]:
     """Retrieves and validates the Nebius API key."""
     key = api_key or os.getenv("NEBIUS_API_KEY")
     if key and key.strip() and key.strip() != "your_nebius_api_key_here":
         return key.strip()
     return None
+
+
+def get_nebius_audit_log() -> List[Dict[str, Any]]:
+    """Returns all recorded Nebius API calls."""
+    return list(_NEBIUS_AUDIT_LOG)
+
+
+def clear_nebius_audit_log() -> None:
+    """Clears the Nebius API audit log."""
+    _NEBIUS_AUDIT_LOG.clear()
+
+
+def log_nebius_call(
+    task: str,
+    model: Optional[str],
+    latency_ms: float,
+    tokens: Dict[str, int],
+    source: str,
+    status: str = "SUCCESS"
+) -> Dict[str, Any]:
+    """Appends a call record to the audit log."""
+    entry = {
+        "timestamp": time.time(),
+        "task": task,
+        "model": model,
+        "latency_ms": round(latency_ms, 2),
+        "tokens": {
+            "prompt_tokens": tokens.get("prompt_tokens", 0),
+            "completion_tokens": tokens.get("completion_tokens", 0),
+            "total_tokens": tokens.get("total_tokens", 0)
+        },
+        "source": source,
+        "status": status
+    }
+    _NEBIUS_AUDIT_LOG.append(entry)
+    return entry
 
 
 def compute_shared_autonomy_arbitration(
@@ -28,9 +89,8 @@ def compute_shared_autonomy_arbitration(
     is_emergency: bool = False
 ) -> float:
     """
-    Computes dynamic arbitration blending factor alpha in [0.0, 1.0].
-    alpha = 0.0 -> 100% human joystick control
-    alpha = 1.0 -> 100% autonomous copilot trajectory override / emergency stop
+    Local deterministic arbitration blending factor alpha in [0.0, 1.0].
+    Executed strictly locally on the wheelchair compute unit.
     """
     if is_emergency:
         return 1.0
@@ -43,9 +103,281 @@ def compute_shared_autonomy_arbitration(
         clearance_penalty = (min_safe_clearance - max(0.0, min_clearance)) / min_safe_clearance
 
     raw_alpha = (0.55 * risk_factor) + (0.45 * clearance_penalty)
-    alpha = max(0.0, min(1.0, round(raw_alpha, 3)))
-    return alpha
+    return float(core.clamp(round(raw_alpha, 3), 0.0, 1.0))
 
+
+def _extract_json(text: str) -> dict:
+    """Parse JSON reply while stripping thinking tags (<think>...</think>), markdown fences, and prose."""
+    clean = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    if clean.startswith("```"):
+        clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.IGNORECASE)
+        clean = re.sub(r"\s*```$", "", clean)
+    try:
+        return json.loads(clean.strip())
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", clean, flags=re.S)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+# ==============================================================================
+# Non-Control Task 1: compile_voice_command
+# ==============================================================================
+
+def _fallback_compile_voice(text: str) -> Dict[str, Any]:
+    """Deterministic offline fallback for voice command compilation. Labeled strictly as fallback."""
+    t = text.lower()
+    if any(w in t for w in ("slow", "careful", "tight", "crawl", "cautious", "narrow")):
+        speed = 0.4
+        clearance = 0.25
+        mode = "cautious" if "cautious" in t or "careful" in t else "narrow"
+    elif any(w in t for w in ("fast", "hurry", "quick", "max", "rush", "speed up")):
+        speed = 1.0
+        clearance = 0.10
+        mode = "standard"
+    elif any(w in t for w in ("stop", "halt", "pause", "wait")):
+        speed = 0.2
+        clearance = 0.35
+        mode = "cautious"
+    else:
+        speed = 0.7
+        clearance = 0.15
+        mode = "standard"
+
+    return {
+        "status": "SUCCESS",
+        "speed_cap_mps": speed,
+        "clearance_margin_m": clearance,
+        "door_mode": mode,
+        "intent_summary": f"Deterministic fallback parser: {mode} mode at {speed} m/s",
+        "source": "fallback",
+        "model": None
+    }
+
+
+def compile_voice_command(
+    text: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: str = DEFAULT_MODEL
+) -> Dict[str, Any]:
+    """
+    Translates user spoken voice commands into bounded configuration parameters.
+    The deterministic safety layer serves as final authority: clamps strictly enforce
+    speed_cap_mps in [0.2, 1.0], clearance_margin_m in [0.05, 0.50], and valid door_mode.
+    """
+    t0 = time.time()
+    active_key = get_api_key(api_key)
+    active_base_url = (base_url or DEFAULT_NEBIUS_BASE_URL).rstrip("/")
+
+    if not active_key:
+        fallback = _fallback_compile_voice(text)
+        log_nebius_call("compile_voice_command", model=None, latency_ms=(time.time() - t0) * 1000,
+                        tokens={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        source="fallback")
+        return fallback
+
+    system_prompt = (
+        "You are the WAYLO Wheelchair Voice Command Compiler running on NVIDIA Nemotron on Nebius Token Factory. "
+        "Translate the user's spoken mobility intent into a strictly bounded JSON configuration object.\n"
+        "Allowed keys:\n"
+        "{\n"
+        '  "speed_cap_mps": <float between 0.2 and 1.0>,\n'
+        '  "clearance_margin_m": <float between 0.05 and 0.50>,\n'
+        '  "door_mode": "standard" | "narrow" | "cautious",\n'
+        '  "intent_summary": "<clear 1-sentence description>"\n'
+        "}\n"
+        "Respond ONLY with valid JSON."
+    )
+
+    headers = {
+        "Authorization": f"Bearer {active_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": model or DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"User Voice Input: \"{text}\""}
+        ],
+        "temperature": 0.1
+    }
+
+    try:
+        resp = requests.post(f"{active_base_url}/chat/completions", headers=headers, json=payload, timeout=20)
+        resp.raise_for_status()
+        resp_data = resp.json()
+        latency_ms = (time.time() - t0) * 1000
+        content = resp_data["choices"][0]["message"]["content"]
+        tokens = resp_data.get("usage", {})
+
+        parsed = _extract_json(content)
+
+        # Deterministic Safety Layer (Final Authority): clamp to hard physical limits
+        raw_speed = float(parsed.get("speed_cap_mps", 0.7))
+        speed_cap = float(core.clamp(round(raw_speed, 2), 0.2, 1.0))
+
+        raw_margin = float(parsed.get("clearance_margin_m", 0.15))
+        clearance_margin = float(core.clamp(round(raw_margin, 2), 0.05, 0.50))
+
+        door_mode = str(parsed.get("door_mode", "standard")).lower().strip()
+        if door_mode not in ("standard", "narrow", "cautious"):
+            door_mode = "standard"
+
+        log_nebius_call("compile_voice_command", model=model, latency_ms=latency_ms,
+                        tokens=tokens, source="nebius_cloud")
+
+        return {
+            "status": "SUCCESS",
+            "speed_cap_mps": speed_cap,
+            "clearance_margin_m": clearance_margin,
+            "door_mode": door_mode,
+            "intent_summary": parsed.get("intent_summary", f"Command parsed: {text}"),
+            "source": "nebius_cloud",
+            "model": model or DEFAULT_MODEL,
+            "latency_ms": round(latency_ms, 2)
+        }
+
+    except Exception as e:
+        latency_ms = (time.time() - t0) * 1000
+        fallback = _fallback_compile_voice(text)
+        fallback["api_notice"] = f"Nebius call failed ({str(e)}), deterministic safety layer applied"
+        log_nebius_call("compile_voice_command", model=model, latency_ms=latency_ms,
+                        tokens={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        source="fallback", status=f"FAILED: {str(e)}")
+        return fallback
+
+
+# ==============================================================================
+# Non-Control Task 2: narrate_incident
+# ==============================================================================
+
+def _fallback_narrate_incident(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic offline caregiver summary. Labeled strictly as fallback."""
+    event_type = str(event.get("event_type", "incident")).lower()
+    clearance = event.get("clearance_m", 0.0)
+    door_w = event.get("door_width_m", 0.91)
+    alpha = event.get("copilot_alpha", 0.0)
+    t = event.get("timestamp_s", 0.0)
+
+    if event_type == "near_miss":
+        text = (f"At t={t:.1f}s, a near-miss alert occurred ({clearance:.2f}m clearance in a {door_w:.2f}m door). "
+                f"WAYLO increased copilot authority (alpha={alpha:.2f}) and safely guided through.")
+    elif event_type == "collision":
+        text = (f"At t={t:.1f}s, doorway boundary contact was detected. "
+                f"Autonomous emergency braking stopped the chair immediately.")
+    elif event_type == "scrape":
+        text = (f"At t={t:.1f}s, tight doorway passage ({clearance:.2f}m clearance). "
+                f"WAYLO smoothly regulated speed and maintained heading.")
+    elif event_type == "human_rescue":
+        text = (f"At t={t:.1f}s, user regained manual control after assistive intervention.")
+    elif event_type == "assist_engaged":
+        text = (f"At t={t:.1f}s, WAYLO engaged shared-autonomy copilot (alpha={alpha:.2f}) to align with {door_w:.2f}m doorway.")
+    else:
+        text = f"Mobility event '{event_type}' logged safely by WAYLO copilot at t={t:.1f}s."
+
+    return {
+        "status": "SUCCESS",
+        "event_type": event_type,
+        "narrative": text,
+        "source": "fallback",
+        "model": None
+    }
+
+
+def narrate_incident(
+    sanitized_event: Dict[str, Any],
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    model: str = DEFAULT_MODEL
+) -> Dict[str, Any]:
+    """
+    Produces a plain-English caregiver summary for a mobility event.
+    Operates ONLY on sanitized event telemetry (no images or raw point clouds).
+    """
+    t0 = time.time()
+    active_key = get_api_key(api_key)
+    active_base_url = (base_url or DEFAULT_NEBIUS_BASE_URL).rstrip("/")
+
+    # Sanitize payload: strip any raw array or large structure
+    clean_event = {
+        k: v for k, v in sanitized_event.items()
+        if not isinstance(v, (np.ndarray, list, dict)) or (isinstance(v, list) and len(v) < 10)
+    }
+
+    if not active_key:
+        fallback = _fallback_narrate_incident(clean_event)
+        log_nebius_call("narrate_incident", model=None, latency_ms=(time.time() - t0) * 1000,
+                        tokens={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        source="fallback")
+        return fallback
+
+    headers = {
+        "Authorization": f"Bearer {active_key}",
+        "Content-Type": "application/json"
+    }
+
+    system_prompt = (
+        "You are the WAYLO Mobility Caregiver Assistant running on NVIDIA Nemotron on Nebius Token Factory. "
+        "Analyze the provided sanitized wheelchair telemetry event and write a concise, compassionate, "
+        "1-2 sentence plain-English summary for a family caregiver or clinician explaining what occurred "
+        "and how WAYLO's safety systems responded.\n"
+        "Respond ONLY with a valid JSON object in this format:\n"
+        "{\n"
+        '  "narrative": "<1-2 sentence plain English summary>"\n'
+        "}"
+    )
+
+    user_prompt = f"Sanitized Telemetry Event: {json.dumps(clean_event)}"
+
+    payload = {
+        "model": model or DEFAULT_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.2
+    }
+
+    try:
+        resp = requests.post(f"{active_base_url}/chat/completions", headers=headers, json=payload, timeout=20)
+        resp.raise_for_status()
+        resp_data = resp.json()
+        latency_ms = (time.time() - t0) * 1000
+        content = resp_data["choices"][0]["message"]["content"]
+        tokens = resp_data.get("usage", {})
+
+        parsed = _extract_json(content)
+        narrative = parsed.get("narrative", "")
+        if not narrative:
+            narrative = _fallback_narrate_incident(clean_event)["narrative"]
+
+        log_nebius_call("narrate_incident", model=model, latency_ms=latency_ms,
+                        tokens=tokens, source="nebius_cloud")
+
+        return {
+            "status": "SUCCESS",
+            "event_type": clean_event.get("event_type", "event"),
+            "narrative": narrative,
+            "source": "nebius_cloud",
+            "model": model or DEFAULT_MODEL,
+            "latency_ms": round(latency_ms, 2)
+        }
+
+    except Exception as e:
+        latency_ms = (time.time() - t0) * 1000
+        fallback = _fallback_narrate_incident(clean_event)
+        fallback["api_notice"] = f"Nebius call failed ({str(e)}), offline caregiver fallback provided"
+        log_nebius_call("narrate_incident", model=model, latency_ms=latency_ms,
+                        tokens={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                        source="fallback", status=f"FAILED: {str(e)}")
+        return fallback
+
+
+# ==============================================================================
+# Deterministic Spatial Inference & High-Level Assistant
+# ==============================================================================
 
 def simulate_spatial_inference(
     user_intent: str = "align_doorway",
@@ -54,8 +386,8 @@ def simulate_spatial_inference(
     accessibility_context: str | dict | None = None
 ) -> dict:
     """
-    Fallback deterministic spatial copilot simulation when Nebius API key is not configured
-    or when running offline. Provides mathematically sound trajectory corrections.
+    Deterministic spatial copilot simulation. Provides mathematically sound trajectory corrections
+    without any cloud dependency.
     """
     intent_norm = user_intent.lower()
 
@@ -100,7 +432,7 @@ def simulate_spatial_inference(
         )
 
     else:
-        # Standard Doorway Intent ("align_doorway" / "Align with Doorway")
+        # Standard Doorway Intent
         if steering_deg == 0.0:
             left_clearance = 0.42
             right_clearance = 0.38
@@ -138,7 +470,7 @@ def simulate_spatial_inference(
     res = {
         "status": "SUCCESS",
         "source": "simulated_copilot_engine",
-        "model": "nvidia/nemotron-3-ultra (simulated)",
+        "model": "deterministic_safety_layer",
         "user_intent": user_intent,
         "clearance_left_m": left_clearance,
         "clearance_right_m": right_clearance,
@@ -156,21 +488,6 @@ def simulate_spatial_inference(
     if accessibility_context:
         res["accessibility_context"] = str(accessibility_context)
     return res
-
-
-def _extract_json(text: str) -> dict:
-    """Parse the model reply while stripping markdown formatting backticks (```json ... ```) and prose."""
-    clean = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
-    if clean.startswith("```"):
-        clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.IGNORECASE)
-        clean = re.sub(r"\s*```$", "", clean)
-    try:
-        return json.loads(clean.strip())
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", clean, flags=re.S)
-        if not match:
-            raise
-        return json.loads(match.group(0))
 
 
 def sanitize_inference(parsed: dict, fallback: dict) -> dict:
@@ -201,124 +518,85 @@ def sanitize_inference(parsed: dict, fallback: dict) -> dict:
 
 
 def analyze_spatial_frame(
-    image_payload: str = "mock_frame_data_001",
+    image_payload: str = "",
     user_intent: str = "align_doorway",
     steering_deg: float = 0.0,
     speed_mps: float = 0.8,
-    api_key: str | None = None,
-    base_url: str | None = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
     model: str = DEFAULT_MODEL,
-    accessibility_context: str | dict | None = None,
+    accessibility_context: Optional[Any] = None,
     **kwargs
 ) -> dict:
     """
-    Sends spatial telemetry and frame metadata to NVIDIA Nemotron models on Nebius
-    Token Factory (https://api.tokenfactory.nebius.com/v1/chat/completions).
-    Parses JSON response stripping markdown formatting backticks.
-    Falls back gracefully to deterministic fallback payload if offline or without API key.
+    Deterministic spatial inference wrapper.
+    Ensures clearance and arbitration alpha values are ALWAYS determined by the local
+    deterministic safety layer, never by LLM hallucinations.
     """
+    t0 = time.time()
+    fallback = simulate_spatial_inference(
+        user_intent=user_intent,
+        steering_deg=steering_deg,
+        speed_mps=speed_mps,
+        accessibility_context=accessibility_context
+    )
+
     active_key = get_api_key(api_key)
-    active_base_url = (base_url or DEFAULT_NEBIUS_BASE_URL).rstrip("/")
-
-    # If no valid API key is available, run deterministic spatial simulation
     if not active_key:
-        return simulate_spatial_inference(
-            user_intent=user_intent,
-            steering_deg=steering_deg,
-            speed_mps=speed_mps,
-            accessibility_context=accessibility_context
-        )
+        return fallback
 
-    headers = {
-        "Authorization": f"Bearer {active_key}",
-        "Content-Type": "application/json"
-    }
-
+    active_base_url = (base_url or DEFAULT_NEBIUS_BASE_URL).rstrip("/")
+    headers = {"Authorization": f"Bearer {active_key}", "Content-Type": "application/json"}
     system_prompt = (
-        "You are WAYLO, an AI-powered shared-autonomy wheelchair mobility copilot running on "
-        "NVIDIA Nemotron / Cosmos on Nebius AI Cloud. "
-        "Analyze spatial boundaries, doorway clearance, corridor obstacles, and user steering. "
-        "Respond ONLY with a valid JSON object with the following keys:\n"
-        "{\n"
-        '  "status": "SUCCESS",\n'
-        '  "clearance_left_m": <float in meters>,\n'
-        '  "clearance_right_m": <float in meters>,\n'
-        '  "steering_correction_deg": <float adjustment in degrees>,\n'
-        '  "emergency_stop": <boolean>,\n'
-        '  "spatial_summary": "<clear 1-2 sentence explanation>",\n'
-        '  "speed_buffer_override": "ACTIVE" | "NOMINAL" | "EMERGENCY_BRAKE",\n'
-        '  "recommended_velocity": "<float> m/s",\n'
-        '  "clearance_left": <float in meters>,\n'
-        '  "clearance_right": <float in meters>,\n'
-        '  "hazard_risk_score": <int between 0 and 100>,\n'
-        '  "arbitration_alpha": <float between 0.0 and 1.0>,\n'
-        '  "time_to_collision_sec": <float>\n'
-        "}"
+        "You are WAYLO High-Level Spatial Mobility Assistant on NVIDIA Nemotron on Nebius Token Factory. "
+        "Provide a high-level situational summary for the user intent. "
+        "Respond ONLY with valid JSON: {\"spatial_summary\": \"<clear 1-2 sentence description>\"}"
     )
-
-    context_str = accessibility_context.get("formatted_context", str(accessibility_context)) if isinstance(accessibility_context, dict) else str(accessibility_context or "")
-    user_prompt = (
-        f"User Intent: {user_intent}\n"
-        f"Manual Steering Angle: {steering_deg}°\n"
-        f"Target Velocity: {speed_mps} m/s\n"
-        f"Visual Frame Metadata: {image_payload}"
-    )
-    if context_str:
-        user_prompt += f"\nAccessibility Standards & Context: {context_str}"
-
-    payload = {
-        "model": model or DEFAULT_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.1
-    }
+    user_prompt = f"User Intent: {user_intent}, Steering: {steering_deg} deg, Speed: {speed_mps} m/s."
+    if image_payload:
+        user_prompt += f", Scene: {image_payload}"
 
     try:
-        response = requests.post(
+        resp = requests.post(
             f"{active_base_url}/chat/completions",
             headers=headers,
-            json=payload,
-            timeout=30
+            json={
+                "model": model or DEFAULT_MODEL,
+                "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                "temperature": 0.1
+            },
+            timeout=15
         )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-
+        resp.raise_for_status()
+        latency_ms = (time.time() - t0) * 1000
+        content = resp.json()["choices"][0]["message"]["content"]
+        tokens = resp.json().get("usage", {})
         parsed = _extract_json(content)
-        parsed = sanitize_inference(
-            parsed,
-            simulate_spatial_inference(user_intent, steering_deg, speed_mps, accessibility_context=accessibility_context),
-        )
-        parsed["source"] = "nebius_cloud"
-        parsed["model"] = model or DEFAULT_MODEL
-        parsed["user_intent"] = user_intent
 
-        if "clearance_left_m" not in parsed:
-            parsed["clearance_left_m"] = parsed.get("clearance_left", 0.42)
-        if "clearance_right_m" not in parsed:
-            parsed["clearance_right_m"] = parsed.get("clearance_right", 0.38)
-
-        if "arbitration_alpha" not in parsed:
-            parsed["arbitration_alpha"] = compute_shared_autonomy_arbitration(
-                hazard_risk=parsed.get("hazard_risk_score", 20),
-                clearance_left=parsed.get("clearance_left", 0.42),
-                clearance_right=parsed.get("clearance_right", 0.38),
-                is_emergency=parsed.get("emergency_stop", False)
-            )
-
-        if accessibility_context:
-            parsed["accessibility_context"] = context_str
-        return parsed
+        # Merge summary but preserve deterministic clearances and alpha
+        fallback["spatial_summary"] = parsed.get("spatial_summary", fallback["spatial_summary"])
+        fallback["source"] = "nebius_cloud"
+        fallback["model"] = model or DEFAULT_MODEL
+        log_nebius_call("spatial_summary", model=model, latency_ms=latency_ms, tokens=tokens, source="nebius_cloud")
+        return fallback
 
     except Exception as e:
-        fallback = simulate_spatial_inference(user_intent, steering_deg, speed_mps, accessibility_context=accessibility_context)
         fallback["source"] = "simulated_copilot_engine (API fallback)"
         fallback["api_notice"] = f"Nebius API call failed: {str(e)}"
         return fallback
 
 
 if __name__ == "__main__":
-    print("Testing WAYLO Nebius Client...")
-    res = analyze_spatial_frame(image_payload="mock_frame_data_001", user_intent="align_doorway")
-    print("Spatial Inference Result:\n", json.dumps(res, indent=2))
+    print("Testing Nebius Client Non-Control Functions...")
+    v = compile_voice_command("Slow down and carefully approach the narrow bathroom door")
+    print("Voice Command Compilation:\n", json.dumps(v, indent=2))
+
+    n = narrate_incident({
+        "event_type": "near_miss",
+        "timestamp_s": 2.4,
+        "door_width_m": 0.81,
+        "clearance_m": 0.06,
+        "copilot_alpha": 0.82
+    })
+    print("Incident Narration:\n", json.dumps(n, indent=2))
+    print("Audit Log:\n", json.dumps(get_nebius_audit_log(), indent=2))

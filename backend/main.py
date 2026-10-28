@@ -25,6 +25,9 @@ try:
     from .nebius_client import (
         analyze_spatial_frame,
         simulate_spatial_inference,
+        compile_voice_command,
+        narrate_incident,
+        get_nebius_audit_log,
         get_api_key,
         compute_shared_autonomy_arbitration,
         DEFAULT_MODEL,
@@ -37,6 +40,9 @@ except (ImportError, ValueError):
     from backend.nebius_client import (
         analyze_spatial_frame,
         simulate_spatial_inference,
+        compile_voice_command,
+        narrate_incident,
+        get_nebius_audit_log,
         get_api_key,
         compute_shared_autonomy_arbitration,
         DEFAULT_MODEL,
@@ -251,6 +257,12 @@ class CopilotStepRequest(BaseModel):
         description="Current wheelchair Y coordinate in meters"
     )
 
+class VoiceCommandRequest(BaseModel):
+    command: str = Field(..., description="Natural language spoken mobility instruction from user")
+
+class IncidentNarrationRequest(BaseModel):
+    event: Dict[str, Any] = Field(..., description="Sanitized mobility event telemetry dictionary")
+
 # ==============================================================================
 # API Endpoints
 # ==============================================================================
@@ -269,6 +281,9 @@ def root_overview():
         "endpoints": {
             "health": "/health",
             "copilot_step": "/api/v1/copilot-step",
+            "voice_command": "/api/v1/voice-command",
+            "narrate_incident": "/api/v1/narrate-incident",
+            "nebius_audit": "/api/nebius/audit",
             "spatial_analyze": "/api/spatial/analyze",
             "kinematics_blend": "/api/kinematics/blend",
             "accessibility_search": "/api/accessibility/search",
@@ -303,6 +318,31 @@ def healthcheck():
             }
         }
     }
+
+@app.get("/api/nebius/audit", summary="Nebius Call Audit Log", tags=["System"])
+def nebius_audit_endpoint():
+    """Returns audit log of all Nebius Token Factory calls including model, latency, tokens, and source."""
+    calls = get_nebius_audit_log()
+    return {
+        "status": "SUCCESS",
+        "total_calls": len(calls),
+        "calls": calls
+    }
+
+@app.post("/api/v1/voice-command", summary="Compile Voice Command via Nebius", tags=["Reasoning"])
+def voice_command_endpoint(req: VoiceCommandRequest):
+    """
+    Translates spoken mobility instruction into bounded parameters via NVIDIA Nemotron.
+    The deterministic safety layer strictly bounds speed_cap_mps to [0.2, 1.0].
+    """
+    return compile_voice_command(text=req.command)
+
+@app.post("/api/v1/narrate-incident", summary="Caregiver Incident Summary via Nebius", tags=["Reasoning"])
+def narrate_incident_endpoint(req: IncidentNarrationRequest):
+    """
+    Produces plain-English caregiver summary for a mobility event using only sanitized fields.
+    """
+    return narrate_incident(sanitized_event=req.event)
 
 @app.post(
     "/api/v1/copilot-step",
