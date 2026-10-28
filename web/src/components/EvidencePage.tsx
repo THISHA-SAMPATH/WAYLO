@@ -127,78 +127,95 @@ export const EvidencePage: React.FC<EvidencePageProps> = ({ onBackToApp }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#14201B]/10 text-xs sm:text-sm">
-                    {Object.entries(summary.by_door_width).map(([widthKey, row]) => (
-                      <tr key={widthKey} className="hover:bg-[#F4F2EC]/40 transition">
-                        <td className="py-3.5 px-4 font-mono font-bold text-[#14201B]">
-                          {row.door_width_m.toFixed(2)} m
-                          {row.door_width_m === 0.81 && (
-                            <span className="ml-2 px-2 py-0.5 rounded text-[10px] bg-[#E3F26D] text-[#17352B] font-bold">
-                              ADA MIN
+                    {Object.entries(summary.by_door_width).map(([widthKey, rawRow]: [string, any]) => {
+                      const doorWidthM = rawRow.door_width_m ?? parseFloat(widthKey)
+                      const unassistedRow = rawRow.uncorrected || rawRow.unassisted
+                      const correctiveRow = rawRow.corrective
+                      const wayloRow = rawRow.waylo
+                      const meanClearance = wayloRow?.min_door_clearance_passed_only?.mean ?? wayloRow?.min_clearance_passed_mean ?? 0
+
+                      return (
+                        <tr key={widthKey} className="hover:bg-[#F4F2EC]/40 transition">
+                          <td className="py-3.5 px-4 font-mono font-bold text-[#14201B]">
+                            {doorWidthM.toFixed(2)} m
+                            {doorWidthM <= 0.82 && (
+                              <span className="ml-2 px-2 py-0.5 rounded text-[10px] bg-[#E3F26D] text-[#17352B] font-bold">
+                                ADA MIN
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[#C2410C]">
+                            {pct(unassistedRow?.collision_rate)}{' '}
+                            <span className="text-[11px] text-[#5B6B63]">
+                              {ciPct(unassistedRow?.collision_ci_95)}
                             </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[#C2410C]">
-                          {pct(row.unassisted.collision_rate)}{' '}
-                          <span className="text-[11px] text-[#5B6B63]">
-                            {ciPct(row.unassisted.collision_ci_95)}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[#5B6B63]">
-                          {pct(row.corrective.collision_rate)}{' '}
-                          <span className="text-[11px] text-[#5B6B63]">
-                            {ciPct(row.corrective.collision_ci_95)}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-[#1F7A4D] bg-[#1F7A4D]/5">
-                          {pct(row.waylo.collision_rate)}{' '}
-                          <span className="text-[11px]">
-                            {ciPct(row.waylo.collision_ci_95)}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-[#1F7A4D] bg-[#1F7A4D]/5">
-                          {pct(row.waylo.pass_rate)}{' '}
-                          <span className="text-[11px]">
-                            {ciPct(row.waylo.pass_ci_95)}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[#14201B]">
-                          +{(row.waylo.min_clearance_passed_mean * 100).toFixed(1)} cm
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[#5B6B63]">
+                            {pct(correctiveRow?.collision_rate)}{' '}
+                            <span className="text-[11px] text-[#5B6B63]">
+                              {ciPct(correctiveRow?.collision_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-[#1F7A4D] bg-[#1F7A4D]/5">
+                            {pct(wayloRow?.collision_rate)}{' '}
+                            <span className="text-[11px]">
+                              {ciPct(wayloRow?.collision_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-[#1F7A4D] bg-[#1F7A4D]/5">
+                            {pct(wayloRow?.pass_rate)}{' '}
+                            <span className="text-[11px]">
+                              {ciPct(wayloRow?.pass_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[#14201B]">
+                            +{(meanClearance * 100).toFixed(1)} cm
+                          </td>
+                        </tr>
+                      )
+                    })}
                     {/* Overall Totals */}
-                    <tr className="bg-[#17352B] text-white font-bold">
-                      <td className="py-4 px-4 font-mono text-[#E3F26D]">
-                        OVERALL (N=1000)
-                      </td>
-                      <td className="py-4 px-4 font-mono text-red-200">
-                        {pct(summary.overall.unassisted.collision_rate)}{' '}
-                        <span className="text-[11px] text-white/70">
-                          {ciPct(summary.overall.unassisted.collision_ci_95)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 font-mono text-white/80">
-                        {pct(summary.overall.corrective.collision_rate)}{' '}
-                        <span className="text-[11px] text-white/70">
-                          {ciPct(summary.overall.corrective.collision_ci_95)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 font-mono text-[#E3F26D]">
-                        {pct(summary.overall.waylo.collision_rate)}{' '}
-                        <span className="text-[11px] text-white/70">
-                          {ciPct(summary.overall.waylo.collision_ci_95)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 font-mono text-[#E3F26D]">
-                        {pct(summary.overall.waylo.pass_rate)}{' '}
-                        <span className="text-[11px] text-white/70">
-                          {ciPct(summary.overall.waylo.pass_ci_95)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 font-mono text-white">
-                        +{(summary.overall.waylo.min_clearance_passed_mean * 100).toFixed(1)} cm
-                      </td>
-                    </tr>
+                    {(() => {
+                      const overallUnassisted = summary.overall.uncorrected || summary.overall.unassisted
+                      const overallCorrective = summary.overall.corrective
+                      const overallWaylo = summary.overall.waylo
+                      const overallClearance = overallWaylo?.min_door_clearance_passed_only?.mean ?? overallWaylo?.min_clearance_passed_mean ?? 0
+
+                      return (
+                        <tr className="bg-[#17352B] text-white font-bold">
+                          <td className="py-4 px-4 font-mono text-[#E3F26D]">
+                            OVERALL (N=1000)
+                          </td>
+                          <td className="py-4 px-4 font-mono text-red-200">
+                            {pct(overallUnassisted?.collision_rate)}{' '}
+                            <span className="text-[11px] text-white/70">
+                              {ciPct(overallUnassisted?.collision_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-white/80">
+                            {pct(overallCorrective?.collision_rate)}{' '}
+                            <span className="text-[11px] text-white/70">
+                              {ciPct(overallCorrective?.collision_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-[#E3F26D]">
+                            {pct(overallWaylo?.collision_rate)}{' '}
+                            <span className="text-[11px] text-white/70">
+                              {ciPct(overallWaylo?.collision_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-[#E3F26D]">
+                            {pct(overallWaylo?.pass_rate)}{' '}
+                            <span className="text-[11px] text-white/70">
+                              {ciPct(overallWaylo?.pass_ci_95)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-white">
+                            +{(overallClearance * 100).toFixed(1)} cm
+                          </td>
+                        </tr>
+                      )
+                    })()}
                   </tbody>
                 </table>
               </div>

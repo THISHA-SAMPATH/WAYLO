@@ -125,9 +125,20 @@ export interface ConditionStats {
   collision_ci_95: [number, number]
   pass_rate: number
   pass_ci_95: [number, number]
-  min_clearance_passed_mean: number
-  min_clearance_passed_std: number
-  n: number
+  total_runs?: number
+  collision_count?: number
+  pass_count?: number
+  min_door_clearance_passed_only?: {
+    mean: number
+    std: number
+    median?: number
+    ci_lower?: number
+    ci_upper?: number
+    count?: number
+  }
+  min_clearance_passed_mean?: number
+  min_clearance_passed_std?: number
+  n?: number
 }
 
 export interface MonteCarloSummaryResponse {
@@ -135,16 +146,19 @@ export interface MonteCarloSummaryResponse {
     n_trials: number
     conditions: string[]
     door_widths: number[]
-    seed: number
+    master_seed?: number
+    seed?: number
   }
   overall: {
-    unassisted: ConditionStats
+    uncorrected?: ConditionStats
+    unassisted?: ConditionStats
     corrective: ConditionStats
     waylo: ConditionStats
   }
   by_door_width: Record<string, {
-    door_width_m: number
-    unassisted: ConditionStats
+    door_width_m?: number
+    uncorrected?: ConditionStats
+    unassisted?: ConditionStats
     corrective: ConditionStats
     waylo: ConditionStats
   }>

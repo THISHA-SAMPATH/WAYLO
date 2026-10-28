@@ -22,6 +22,7 @@ from pathlib import Path
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WEB_DIST = PROJECT_ROOT / "web" / "dist"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -285,8 +286,7 @@ class LedgerEventRequest(BaseModel):
 # API Endpoints
 # ==============================================================================
 
-@app.get("/", summary="WAYLO System Overview", tags=["System"])
-def root_overview():
+def get_system_overview():
     """Returns system status, active Nebius model, and API route index."""
     has_nebius = bool(get_api_key())
     return {
@@ -298,6 +298,7 @@ def root_overview():
         "default_model": DEFAULT_MODEL,
         "endpoints": {
             "health": "/health",
+            "overview": "/api/overview",
             "copilot_step": "/api/v1/copilot-step",
             "voice_command": "/api/v1/voice-command",
             "narrate_incident": "/api/v1/narrate-incident",
@@ -308,11 +309,24 @@ def root_overview():
             "spatial_analyze": "/api/spatial/analyze",
             "kinematics_blend": "/api/kinematics/blend",
             "accessibility_search": "/api/accessibility/search",
+            "monte_carlo_summary": "/api/monte-carlo/summary",
+            "monte_carlo_sensitivity": "/api/monte-carlo/sensitivity",
+            "depth_benchmark": "/api/depth-benchmark/results",
             "scenarios": "/api/scenarios",
             "matlab_telemetry": "/api/matlab/telemetry",
             "documentation": "/docs"
         }
     }
+
+root_overview = get_system_overview
+
+@app.get("/", summary="WAYLO Unified Web Entrypoint", tags=["System"])
+def root_entry():
+    """Serves the unified web frontend SPA, or API overview if frontend is not built."""
+    index_target = WEB_DIST / "index.html"
+    if index_target.exists():
+        return FileResponse(index_target)
+    return get_system_overview()
 
 @app.get("/health", summary="Healthcheck & Services Status", tags=["System"])
 def healthcheck():
