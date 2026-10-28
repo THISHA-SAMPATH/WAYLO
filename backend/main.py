@@ -272,10 +272,32 @@ class CopilotStepRequest(BaseModel):
     )
 
 class VoiceCommandRequest(BaseModel):
-    command: str = Field(..., description="Natural language spoken mobility instruction from user")
+    command: Optional[str] = Field(default=None, description="Natural language spoken mobility instruction from user")
+    utterance: Optional[str] = Field(default=None, description="Spoken instruction alias")
+
+    def get_text(self) -> str:
+        return self.command or self.utterance or "Give me more room on the door"
 
 class IncidentNarrationRequest(BaseModel):
-    event: Dict[str, Any] = Field(..., description="Sanitized mobility event telemetry dictionary")
+    event: Optional[Dict[str, Any]] = Field(default=None, description="Sanitized mobility event telemetry dictionary")
+    event_type: Optional[str] = None
+    peak_risk: Optional[float] = None
+    speed_mps: Optional[float] = None
+    min_clearance_m: Optional[float] = None
+    alpha: Optional[float] = None
+    user_profile: Optional[str] = None
+
+    def get_event(self) -> Dict[str, Any]:
+        if self.event:
+            return self.event
+        return {
+            "event_type": self.event_type or "doorway_centering_assist",
+            "peak_risk": self.peak_risk if self.peak_risk is not None else 0.82,
+            "speed_mps": self.speed_mps if self.speed_mps is not None else 0.85,
+            "min_clearance_m": self.min_clearance_m if self.min_clearance_m is not None else 0.07,
+            "alpha": self.alpha if self.alpha is not None else 0.65,
+            "user_profile": self.user_profile or "Hand tremor 2.5 deg with heading drift"
+        }
 
 class LedgerEventRequest(BaseModel):
     event_type: str = Field(..., description="One of: assist_engaged, near_miss, scrape, collision, human_rescue")
@@ -370,14 +392,14 @@ def voice_command_endpoint(req: VoiceCommandRequest):
     Translates spoken mobility instruction into bounded parameters via NVIDIA Nemotron.
     The deterministic safety layer strictly bounds speed_cap_mps to [0.2, 1.0].
     """
-    return compile_voice_command(text=req.command)
+    return compile_voice_command(text=req.get_text())
 
 @app.post("/api/v1/narrate-incident", summary="Caregiver Incident Summary via Nebius", tags=["Reasoning"])
 def narrate_incident_endpoint(req: IncidentNarrationRequest):
     """
     Produces plain-English caregiver summary for a mobility event using only sanitized fields.
     """
-    return narrate_incident(sanitized_event=req.event)
+    return narrate_incident(sanitized_event=req.get_event())
 
 # --- Ledger Endpoints ---
 @app.get("/api/v1/ledger/events", summary="Get Mobility Ledger Events", tags=["Ledger"])

@@ -79,7 +79,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/api/v1/voice-command`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ utterance }),
+      body: JSON.stringify({ command: utterance, utterance }),
     })
     return handleResponse<VoiceCommandResponse>(res, 'Voice command')
   },
@@ -92,18 +92,19 @@ export const api = {
     alpha?: number
     user_profile?: string
   }): Promise<IncidentNarrationResponse> {
+    const event = {
+      event_type: 'doorway_entry_assist',
+      peak_risk: 0.85,
+      speed_mps: 0.9,
+      min_clearance_m: 0.06,
+      alpha: 0.68,
+      user_profile: 'Tremor 2.0 deg, Drift 15.0 deg',
+      ...payload,
+    }
     const res = await fetch(`${API_BASE}/api/v1/narrate-incident`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: 'doorway_entry_assist',
-        peak_risk: 0.85,
-        speed_mps: 0.9,
-        min_clearance_m: 0.06,
-        alpha: 0.68,
-        user_profile: 'Tremor 2.0 deg, Drift 15.0 deg',
-        ...payload,
-      }),
+      body: JSON.stringify({ event, ...event }),
     })
     return handleResponse<IncidentNarrationResponse>(res, 'Narrate incident')
   },
