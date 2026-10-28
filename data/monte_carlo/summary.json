@@ -1,7 +1,20 @@
 {
   "metadata": {
-    "n_trials": 100,
+    "n_trials": 1000,
     "master_seed": 42,
+    "speed_range_mps": [
+      0.6,
+      1.2
+    ],
+    "drift_range_deg": [
+      -25.0,
+      25.0
+    ],
+    "sensor_noise": {
+      "lidar_sigma_m": 0.02,
+      "dropout_prob": 0.02,
+      "sensor_latency_s": 0.1
+    },
     "door_widths": [
       0.81,
       0.91,
@@ -17,435 +30,842 @@
   },
   "overall": {
     "uncorrected": {
-      "total_runs": 100,
-      "collision_count": 84,
-      "collision_rate": 0.84,
+      "total_runs": 1000,
+      "collision_count": 875,
+      "collision_rate": 0.875,
       "collision_ci_95": [
-        0.7558,
-        0.899
+        0.8531,
+        0.8941
       ],
-      "pass_count": 16,
-      "pass_rate": 0.16,
+      "pass_count": 125,
+      "pass_rate": 0.125,
       "pass_ci_95": [
-        0.101,
-        0.2442
+        0.1059,
+        0.1469
       ],
-      "min_door_clearance": {
-        "mean": -0.2868,
-        "std": 0.2872,
-        "median": -0.214,
-        "ci_lower": -0.3431,
-        "ci_upper": -0.2305,
-        "count": 100
+      "min_door_clearance_passed_only": {
+        "mean": 0.1117,
+        "std": 0.0841,
+        "median": 0.096,
+        "ci_lower": 0.097,
+        "ci_upper": 0.1265,
+        "count": 125
       }
     },
     "corrective": {
-      "total_runs": 100,
-      "collision_count": 66,
-      "collision_rate": 0.66,
+      "total_runs": 1000,
+      "collision_count": 664,
+      "collision_rate": 0.664,
       "collision_ci_95": [
-        0.5628,
-        0.7454
+        0.6341,
+        0.6926
       ],
-      "pass_count": 34,
-      "pass_rate": 0.34,
+      "pass_count": 336,
+      "pass_rate": 0.336,
       "pass_ci_95": [
-        0.2546,
-        0.4372
+        0.3074,
+        0.3659
       ],
-      "min_door_clearance": {
-        "mean": -0.0958,
-        "std": 0.2227,
-        "median": -0.12,
-        "ci_lower": -0.1394,
-        "ci_upper": -0.0521,
-        "count": 100
+      "min_door_clearance_passed_only": {
+        "mean": 0.1241,
+        "std": 0.0939,
+        "median": 0.1065,
+        "ci_lower": 0.114,
+        "ci_upper": 0.1341,
+        "count": 336
       }
     },
     "waylo": {
-      "total_runs": 100,
-      "collision_count": 0,
-      "collision_rate": 0.0,
+      "total_runs": 1000,
+      "collision_count": 29,
+      "collision_rate": 0.029,
       "collision_ci_95": [
-        0.0,
-        0.037
+        0.0203,
+        0.0413
       ],
-      "pass_count": 100,
-      "pass_rate": 1.0,
+      "pass_count": 971,
+      "pass_rate": 0.971,
       "pass_ci_95": [
-        0.963,
-        1.0
+        0.9587,
+        0.9797
       ],
-      "min_door_clearance": {
-        "mean": 0.1123,
-        "std": 0.1051,
-        "median": 0.071,
-        "ci_lower": 0.0917,
-        "ci_upper": 0.1329,
-        "count": 100
+      "min_door_clearance_passed_only": {
+        "mean": 0.1105,
+        "std": 0.095,
+        "median": 0.08,
+        "ci_lower": 0.1045,
+        "ci_upper": 0.1164,
+        "count": 971
       }
     }
   },
   "by_door_width": {
     "0.81": {
       "uncorrected": {
-        "total_runs": 15,
-        "collision_count": 15,
-        "collision_rate": 1.0,
+        "total_runs": 211,
+        "collision_count": 201,
+        "collision_rate": 0.9526,
         "collision_ci_95": [
-          0.7961,
-          1.0
+          0.915,
+          0.9741
         ],
-        "pass_count": 0,
-        "pass_rate": 0.0,
+        "pass_count": 10,
+        "pass_rate": 0.0474,
         "pass_ci_95": [
-          0.0,
-          0.2039
+          0.0259,
+          0.085
         ],
-        "min_door_clearance": {
-          "mean": -0.3929,
-          "std": 0.2133,
-          "median": -0.281,
-          "ci_lower": -0.5009,
-          "ci_upper": -0.285,
-          "count": 15
+        "min_door_clearance_passed_only": {
+          "mean": 0.0368,
+          "std": 0.0281,
+          "median": 0.036,
+          "ci_lower": 0.0194,
+          "ci_upper": 0.0542,
+          "count": 10
         }
       },
       "corrective": {
-        "total_runs": 15,
-        "collision_count": 15,
-        "collision_rate": 1.0,
+        "total_runs": 211,
+        "collision_count": 183,
+        "collision_rate": 0.8673,
         "collision_ci_95": [
-          0.7961,
-          1.0
+          0.8149,
+          0.9066
         ],
-        "pass_count": 0,
-        "pass_rate": 0.0,
+        "pass_count": 28,
+        "pass_rate": 0.1327,
         "pass_ci_95": [
-          0.0,
-          0.2039
+          0.0934,
+          0.1851
         ],
-        "min_door_clearance": {
-          "mean": -0.2436,
-          "std": 0.1256,
-          "median": -0.266,
-          "ci_lower": -0.3072,
-          "ci_upper": -0.18,
-          "count": 15
+        "min_door_clearance_passed_only": {
+          "mean": 0.0439,
+          "std": 0.0181,
+          "median": 0.0435,
+          "ci_lower": 0.0371,
+          "ci_upper": 0.0506,
+          "count": 28
         }
       },
       "waylo": {
-        "total_runs": 15,
-        "collision_count": 0,
-        "collision_rate": 0.0,
+        "total_runs": 211,
+        "collision_count": 27,
+        "collision_rate": 0.128,
         "collision_ci_95": [
-          0.0,
-          0.2039
+          0.0895,
+          0.1798
         ],
-        "pass_count": 15,
-        "pass_rate": 1.0,
+        "pass_count": 184,
+        "pass_rate": 0.872,
         "pass_ci_95": [
-          0.7961,
-          1.0
+          0.8202,
+          0.9105
         ],
-        "min_door_clearance": {
-          "mean": 0.0131,
-          "std": 0.012,
-          "median": 0.007,
-          "ci_lower": 0.007,
-          "ci_upper": 0.0191,
-          "count": 15
+        "min_door_clearance_passed_only": {
+          "mean": 0.0245,
+          "std": 0.0195,
+          "median": 0.021,
+          "ci_lower": 0.0217,
+          "ci_upper": 0.0273,
+          "count": 184
         }
       }
     },
     "0.91": {
       "uncorrected": {
-        "total_runs": 31,
-        "collision_count": 28,
-        "collision_rate": 0.9032,
+        "total_runs": 206,
+        "collision_count": 192,
+        "collision_rate": 0.932,
         "collision_ci_95": [
-          0.751,
-          0.9665
+          0.8892,
+          0.9591
         ],
-        "pass_count": 3,
-        "pass_rate": 0.0968,
+        "pass_count": 14,
+        "pass_rate": 0.068,
         "pass_ci_95": [
-          0.0335,
-          0.249
+          0.0409,
+          0.1108
         ],
-        "min_door_clearance": {
-          "mean": -0.3303,
-          "std": 0.2672,
-          "median": -0.284,
-          "ci_lower": -0.4243,
-          "ci_upper": -0.2362,
-          "count": 31
+        "min_door_clearance_passed_only": {
+          "mean": 0.0596,
+          "std": 0.0366,
+          "median": 0.0555,
+          "ci_lower": 0.0404,
+          "ci_upper": 0.0787,
+          "count": 14
         }
       },
       "corrective": {
-        "total_runs": 31,
-        "collision_count": 25,
-        "collision_rate": 0.8065,
+        "total_runs": 206,
+        "collision_count": 161,
+        "collision_rate": 0.7816,
         "collision_ci_95": [
-          0.6372,
-          0.9081
+          0.7203,
+          0.8325
         ],
-        "pass_count": 6,
-        "pass_rate": 0.1935,
+        "pass_count": 45,
+        "pass_rate": 0.2184,
         "pass_ci_95": [
-          0.0919,
-          0.3628
+          0.1675,
+          0.2797
         ],
-        "min_door_clearance": {
-          "mean": -0.1695,
-          "std": 0.1713,
-          "median": -0.17,
-          "ci_lower": -0.2297,
-          "ci_upper": -0.1092,
-          "count": 31
+        "min_door_clearance_passed_only": {
+          "mean": 0.0595,
+          "std": 0.0399,
+          "median": 0.065,
+          "ci_lower": 0.0478,
+          "ci_upper": 0.0711,
+          "count": 45
         }
       },
       "waylo": {
-        "total_runs": 31,
-        "collision_count": 0,
-        "collision_rate": 0.0,
+        "total_runs": 206,
+        "collision_count": 2,
+        "collision_rate": 0.0097,
         "collision_ci_95": [
-          0.0,
-          0.1103
+          0.0027,
+          0.0347
         ],
-        "pass_count": 31,
-        "pass_rate": 1.0,
+        "pass_count": 204,
+        "pass_rate": 0.9903,
         "pass_ci_95": [
-          0.8897,
-          1.0
+          0.9653,
+          0.9973
         ],
-        "min_door_clearance": {
-          "mean": 0.0503,
-          "std": 0.031,
-          "median": 0.045,
-          "ci_lower": 0.0394,
-          "ci_upper": 0.0612,
-          "count": 31
+        "min_door_clearance_passed_only": {
+          "mean": 0.048,
+          "std": 0.0308,
+          "median": 0.04,
+          "ci_lower": 0.0437,
+          "ci_upper": 0.0522,
+          "count": 204
         }
       }
     },
     "1.00": {
       "uncorrected": {
-        "total_runs": 17,
-        "collision_count": 16,
-        "collision_rate": 0.9412,
+        "total_runs": 203,
+        "collision_count": 172,
+        "collision_rate": 0.8473,
         "collision_ci_95": [
-          0.7302,
-          0.9895
+          0.7914,
+          0.8903
         ],
-        "pass_count": 1,
-        "pass_rate": 0.0588,
+        "pass_count": 31,
+        "pass_rate": 0.1527,
         "pass_ci_95": [
-          0.0105,
-          0.2698
+          0.1097,
+          0.2086
         ],
-        "min_door_clearance": {
-          "mean": -0.4142,
-          "std": 0.3161,
-          "median": -0.214,
-          "ci_lower": -0.5644,
-          "ci_upper": -0.2639,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.0973,
+          "std": 0.0569,
+          "median": 0.096,
+          "ci_lower": 0.0773,
+          "ci_upper": 0.1173,
+          "count": 31
         }
       },
       "corrective": {
-        "total_runs": 17,
-        "collision_count": 14,
-        "collision_rate": 0.8235,
+        "total_runs": 203,
+        "collision_count": 139,
+        "collision_rate": 0.6847,
         "collision_ci_95": [
-          0.5897,
-          0.9381
+          0.6179,
+          0.7447
         ],
-        "pass_count": 3,
-        "pass_rate": 0.1765,
+        "pass_count": 64,
+        "pass_rate": 0.3153,
         "pass_ci_95": [
-          0.0619,
-          0.4103
+          0.2553,
+          0.3821
         ],
-        "min_door_clearance": {
-          "mean": -0.1913,
-          "std": 0.1825,
-          "median": -0.153,
-          "ci_lower": -0.278,
-          "ci_upper": -0.1046,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.1015,
+          "std": 0.0538,
+          "median": 0.1065,
+          "ci_lower": 0.0884,
+          "ci_upper": 0.1147,
+          "count": 64
         }
       },
       "waylo": {
-        "total_runs": 17,
+        "total_runs": 203,
         "collision_count": 0,
         "collision_rate": 0.0,
         "collision_ci_95": [
           0.0,
-          0.1843
+          0.0186
         ],
-        "pass_count": 17,
+        "pass_count": 203,
         "pass_rate": 1.0,
         "pass_ci_95": [
-          0.8157,
+          0.9814,
           1.0
         ],
-        "min_door_clearance": {
-          "mean": 0.0678,
-          "std": 0.0304,
-          "median": 0.057,
-          "ci_lower": 0.0534,
-          "ci_upper": 0.0823,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.0823,
+          "std": 0.0408,
+          "median": 0.071,
+          "ci_lower": 0.0767,
+          "ci_upper": 0.0879,
+          "count": 203
         }
       }
     },
     "1.10": {
       "uncorrected": {
-        "total_runs": 17,
-        "collision_count": 12,
-        "collision_rate": 0.7059,
+        "total_runs": 196,
+        "collision_count": 171,
+        "collision_rate": 0.8724,
         "collision_ci_95": [
-          0.4687,
-          0.8672
+          0.8185,
+          0.9121
         ],
-        "pass_count": 5,
-        "pass_rate": 0.2941,
+        "pass_count": 25,
+        "pass_rate": 0.1276,
         "pass_ci_95": [
-          0.1328,
-          0.5313
+          0.0879,
+          0.1815
         ],
-        "min_door_clearance": {
-          "mean": -0.2391,
-          "std": 0.2753,
-          "median": -0.242,
-          "ci_lower": -0.3699,
-          "ci_upper": -0.1082,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.0966,
+          "std": 0.0557,
+          "median": 0.096,
+          "ci_lower": 0.0747,
+          "ci_upper": 0.1184,
+          "count": 25
         }
       },
       "corrective": {
-        "total_runs": 17,
-        "collision_count": 8,
-        "collision_rate": 0.4706,
+        "total_runs": 196,
+        "collision_count": 124,
+        "collision_rate": 0.6327,
         "collision_ci_95": [
-          0.2617,
-          0.6904
+          0.5632,
+          0.697
         ],
-        "pass_count": 9,
-        "pass_rate": 0.5294,
+        "pass_count": 72,
+        "pass_rate": 0.3673,
         "pass_ci_95": [
-          0.3096,
-          0.7383
+          0.303,
+          0.4368
         ],
-        "min_door_clearance": {
-          "mean": -0.0429,
-          "std": 0.1999,
-          "median": 0.02,
-          "ci_lower": -0.1379,
-          "ci_upper": 0.0521,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.1087,
+          "std": 0.0655,
+          "median": 0.1245,
+          "ci_lower": 0.0936,
+          "ci_upper": 0.1239,
+          "count": 72
         }
       },
       "waylo": {
-        "total_runs": 17,
+        "total_runs": 196,
         "collision_count": 0,
         "collision_rate": 0.0,
         "collision_ci_95": [
           0.0,
-          0.1843
+          0.0192
         ],
-        "pass_count": 17,
+        "pass_count": 196,
         "pass_rate": 1.0,
         "pass_ci_95": [
-          0.8157,
+          0.9808,
           1.0
         ],
-        "min_door_clearance": {
-          "mean": 0.1407,
-          "std": 0.0432,
-          "median": 0.135,
-          "ci_lower": 0.1202,
-          "ci_upper": 0.1612,
-          "count": 17
+        "min_door_clearance_passed_only": {
+          "mean": 0.1259,
+          "std": 0.0363,
+          "median": 0.117,
+          "ci_lower": 0.1208,
+          "ci_upper": 0.131,
+          "count": 196
         }
       }
     },
     "1.40": {
       "uncorrected": {
-        "total_runs": 20,
-        "collision_count": 13,
-        "collision_rate": 0.65,
+        "total_runs": 184,
+        "collision_count": 139,
+        "collision_rate": 0.7554,
         "collision_ci_95": [
-          0.4329,
-          0.8188
+          0.6885,
+          0.8119
         ],
-        "pass_count": 7,
-        "pass_rate": 0.35,
+        "pass_count": 45,
+        "pass_rate": 0.2446,
         "pass_ci_95": [
-          0.1812,
-          0.5671
+          0.1881,
+          0.3115
         ],
-        "min_door_clearance": {
-          "mean": -0.0721,
-          "std": 0.2417,
-          "median": -0.0755,
-          "ci_lower": -0.178,
-          "ci_upper": 0.0339,
-          "count": 20
+        "min_door_clearance_passed_only": {
+          "mean": 0.163,
+          "std": 0.102,
+          "median": 0.126,
+          "ci_lower": 0.1332,
+          "ci_upper": 0.1928,
+          "count": 45
         }
       },
       "corrective": {
-        "total_runs": 20,
-        "collision_count": 4,
-        "collision_rate": 0.2,
+        "total_runs": 184,
+        "collision_count": 57,
+        "collision_rate": 0.3098,
         "collision_ci_95": [
-          0.0807,
-          0.416
+          0.2474,
+          0.3799
         ],
-        "pass_count": 16,
-        "pass_rate": 0.8,
+        "pass_count": 127,
+        "pass_rate": 0.6902,
         "pass_ci_95": [
-          0.584,
-          0.9193
+          0.6201,
+          0.7526
         ],
-        "min_door_clearance": {
-          "mean": 0.1656,
-          "std": 0.1732,
-          "median": 0.22,
-          "ci_lower": 0.0897,
-          "ci_upper": 0.2415,
-          "count": 20
+        "min_door_clearance_passed_only": {
+          "mean": 0.1847,
+          "std": 0.1093,
+          "median": 0.189,
+          "ci_lower": 0.1657,
+          "ci_upper": 0.2037,
+          "count": 127
         }
       },
       "waylo": {
-        "total_runs": 20,
+        "total_runs": 184,
         "collision_count": 0,
         "collision_rate": 0.0,
         "collision_ci_95": [
           0.0,
-          0.1611
+          0.0205
         ],
-        "pass_count": 20,
+        "pass_count": 184,
         "pass_rate": 1.0,
         "pass_ci_95": [
-          0.8389,
+          0.9795,
           1.0
         ],
-        "min_door_clearance": {
-          "mean": 0.2968,
-          "std": 0.0346,
-          "median": 0.297,
-          "ci_lower": 0.2816,
-          "ci_upper": 0.3119,
-          "count": 20
+        "min_door_clearance_passed_only": {
+          "mean": 0.2804,
+          "std": 0.035,
+          "median": 0.272,
+          "ci_lower": 0.2754,
+          "ci_upper": 0.2855,
+          "count": 184
         }
       }
     }
   },
   "waylo_failure_cases": {
-    "count": 0,
-    "failure_rate": 0.0,
-    "cases": []
+    "count": 29,
+    "failure_rate": 0.029,
+    "cases": [
+      {
+        "trial_id": 1,
+        "door_width_m": 0.81,
+        "drift_deg": 20.55,
+        "tremor_deg": 2.99,
+        "reaction_delay_s": 0.426,
+        "fatigue_rate": 0.069,
+        "speed_mps": 1.17,
+        "collision": true,
+        "collision_time_s": 4.3,
+        "min_clearance_m": -0.004,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 25,
+        "door_width_m": 0.81,
+        "drift_deg": -24.92,
+        "tremor_deg": 2.07,
+        "reaction_delay_s": 0.511,
+        "fatigue_rate": 0.035,
+        "speed_mps": 1.1,
+        "collision": true,
+        "collision_time_s": 4.48,
+        "min_clearance_m": -0.009,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 48,
+        "door_width_m": 0.91,
+        "drift_deg": 24.54,
+        "tremor_deg": 1.52,
+        "reaction_delay_s": 0.599,
+        "fatigue_rate": 0.056,
+        "speed_mps": 0.89,
+        "collision": true,
+        "collision_time_s": 5.24,
+        "min_clearance_m": -0.004,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 76,
+        "door_width_m": 0.81,
+        "drift_deg": 20.45,
+        "tremor_deg": 1.97,
+        "reaction_delay_s": 0.391,
+        "fatigue_rate": 0.07,
+        "speed_mps": 0.94,
+        "collision": true,
+        "collision_time_s": 4.94,
+        "min_clearance_m": -0.002,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 166,
+        "door_width_m": 0.81,
+        "drift_deg": 22.93,
+        "tremor_deg": 3.13,
+        "reaction_delay_s": 0.486,
+        "fatigue_rate": 0.07,
+        "speed_mps": 0.77,
+        "collision": true,
+        "collision_time_s": 6.2,
+        "min_clearance_m": -0.002,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 201,
+        "door_width_m": 0.81,
+        "drift_deg": -21.19,
+        "tremor_deg": 3.18,
+        "reaction_delay_s": 0.312,
+        "fatigue_rate": 0.044,
+        "speed_mps": 1.03,
+        "collision": true,
+        "collision_time_s": 4.74,
+        "min_clearance_m": -0.003,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 266,
+        "door_width_m": 0.81,
+        "drift_deg": -20.36,
+        "tremor_deg": 2.7,
+        "reaction_delay_s": 0.502,
+        "fatigue_rate": 0.039,
+        "speed_mps": 0.65,
+        "collision": true,
+        "collision_time_s": 6.54,
+        "min_clearance_m": -0.003,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 319,
+        "door_width_m": 0.81,
+        "drift_deg": 21.84,
+        "tremor_deg": 3.17,
+        "reaction_delay_s": 0.486,
+        "fatigue_rate": 0.049,
+        "speed_mps": 1.18,
+        "collision": true,
+        "collision_time_s": 4.24,
+        "min_clearance_m": -0.002,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 338,
+        "door_width_m": 0.81,
+        "drift_deg": 22.56,
+        "tremor_deg": 1.31,
+        "reaction_delay_s": 0.454,
+        "fatigue_rate": 0.029,
+        "speed_mps": 0.87,
+        "collision": true,
+        "collision_time_s": 5.36,
+        "min_clearance_m": -0.01,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 348,
+        "door_width_m": 0.81,
+        "drift_deg": 18.7,
+        "tremor_deg": 2.27,
+        "reaction_delay_s": 0.529,
+        "fatigue_rate": 0.079,
+        "speed_mps": 0.73,
+        "collision": true,
+        "collision_time_s": 5.92,
+        "min_clearance_m": -0.003,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 432,
+        "door_width_m": 0.81,
+        "drift_deg": 24.03,
+        "tremor_deg": 3.26,
+        "reaction_delay_s": 0.267,
+        "fatigue_rate": 0.078,
+        "speed_mps": 0.95,
+        "collision": true,
+        "collision_time_s": 5.0600000000000005,
+        "min_clearance_m": -0.006,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 440,
+        "door_width_m": 0.81,
+        "drift_deg": -19.63,
+        "tremor_deg": 2.52,
+        "reaction_delay_s": 0.216,
+        "fatigue_rate": 0.079,
+        "speed_mps": 0.74,
+        "collision": true,
+        "collision_time_s": 5.92,
+        "min_clearance_m": -0.001,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 451,
+        "door_width_m": 0.81,
+        "drift_deg": 24.97,
+        "tremor_deg": 1.91,
+        "reaction_delay_s": 0.48,
+        "fatigue_rate": 0.06,
+        "speed_mps": 1.0,
+        "collision": true,
+        "collision_time_s": 4.84,
+        "min_clearance_m": -0.009,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 456,
+        "door_width_m": 0.81,
+        "drift_deg": 22.27,
+        "tremor_deg": 2.57,
+        "reaction_delay_s": 0.452,
+        "fatigue_rate": 0.074,
+        "speed_mps": 1.08,
+        "collision": true,
+        "collision_time_s": 4.54,
+        "min_clearance_m": -0.003,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 517,
+        "door_width_m": 0.81,
+        "drift_deg": -19.96,
+        "tremor_deg": 1.76,
+        "reaction_delay_s": 0.379,
+        "fatigue_rate": 0.056,
+        "speed_mps": 1.12,
+        "collision": true,
+        "collision_time_s": 4.38,
+        "min_clearance_m": -0.002,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 555,
+        "door_width_m": 0.81,
+        "drift_deg": 14.72,
+        "tremor_deg": 0.97,
+        "reaction_delay_s": 0.447,
+        "fatigue_rate": 0.071,
+        "speed_mps": 0.7,
+        "collision": true,
+        "collision_time_s": 6.66,
+        "min_clearance_m": -0.0,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 655,
+        "door_width_m": 0.81,
+        "drift_deg": 19.07,
+        "tremor_deg": 2.65,
+        "reaction_delay_s": 0.21,
+        "fatigue_rate": 0.024,
+        "speed_mps": 0.65,
+        "collision": true,
+        "collision_time_s": 6.98,
+        "min_clearance_m": -0.001,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 692,
+        "door_width_m": 0.81,
+        "drift_deg": -23.43,
+        "tremor_deg": 2.0,
+        "reaction_delay_s": 0.384,
+        "fatigue_rate": 0.052,
+        "speed_mps": 1.12,
+        "collision": true,
+        "collision_time_s": 4.46,
+        "min_clearance_m": -0.006,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 732,
+        "door_width_m": 0.91,
+        "drift_deg": 24.64,
+        "tremor_deg": 1.84,
+        "reaction_delay_s": 0.6,
+        "fatigue_rate": 0.071,
+        "speed_mps": 0.78,
+        "collision": true,
+        "collision_time_s": 5.76,
+        "min_clearance_m": -0.016,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 738,
+        "door_width_m": 0.81,
+        "drift_deg": -23.54,
+        "tremor_deg": 1.9,
+        "reaction_delay_s": 0.332,
+        "fatigue_rate": 0.066,
+        "speed_mps": 0.68,
+        "collision": true,
+        "collision_time_s": 6.28,
+        "min_clearance_m": -0.004,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 798,
+        "door_width_m": 0.81,
+        "drift_deg": 24.74,
+        "tremor_deg": 1.78,
+        "reaction_delay_s": 0.553,
+        "fatigue_rate": 0.037,
+        "speed_mps": 0.85,
+        "collision": true,
+        "collision_time_s": 5.48,
+        "min_clearance_m": -0.011,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 816,
+        "door_width_m": 0.81,
+        "drift_deg": -19.19,
+        "tremor_deg": 2.44,
+        "reaction_delay_s": 0.53,
+        "fatigue_rate": 0.062,
+        "speed_mps": 0.95,
+        "collision": true,
+        "collision_time_s": 4.98,
+        "min_clearance_m": -0.001,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 827,
+        "door_width_m": 0.81,
+        "drift_deg": 14.82,
+        "tremor_deg": 3.12,
+        "reaction_delay_s": 0.589,
+        "fatigue_rate": 0.055,
+        "speed_mps": 0.62,
+        "collision": true,
+        "collision_time_s": 7.0,
+        "min_clearance_m": -0.003,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 829,
+        "door_width_m": 0.81,
+        "drift_deg": 22.01,
+        "tremor_deg": 2.13,
+        "reaction_delay_s": 0.535,
+        "fatigue_rate": 0.051,
+        "speed_mps": 0.68,
+        "collision": true,
+        "collision_time_s": 5.6000000000000005,
+        "min_clearance_m": -0.0,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 853,
+        "door_width_m": 0.81,
+        "drift_deg": 24.78,
+        "tremor_deg": 2.86,
+        "reaction_delay_s": 0.567,
+        "fatigue_rate": 0.065,
+        "speed_mps": 0.78,
+        "collision": true,
+        "collision_time_s": 5.7,
+        "min_clearance_m": -0.009,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 878,
+        "door_width_m": 0.81,
+        "drift_deg": -22.22,
+        "tremor_deg": 1.13,
+        "reaction_delay_s": 0.409,
+        "fatigue_rate": 0.067,
+        "speed_mps": 1.18,
+        "collision": true,
+        "collision_time_s": 4.24,
+        "min_clearance_m": -0.005,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 956,
+        "door_width_m": 0.81,
+        "drift_deg": 20.79,
+        "tremor_deg": 0.6,
+        "reaction_delay_s": 0.515,
+        "fatigue_rate": 0.045,
+        "speed_mps": 1.14,
+        "collision": true,
+        "collision_time_s": 4.32,
+        "min_clearance_m": -0.007,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 991,
+        "door_width_m": 0.81,
+        "drift_deg": 23.19,
+        "tremor_deg": 2.41,
+        "reaction_delay_s": 0.588,
+        "fatigue_rate": 0.037,
+        "speed_mps": 1.05,
+        "collision": true,
+        "collision_time_s": 4.62,
+        "min_clearance_m": -0.005,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      },
+      {
+        "trial_id": 995,
+        "door_width_m": 0.81,
+        "drift_deg": 21.64,
+        "tremor_deg": 3.36,
+        "reaction_delay_s": 0.546,
+        "fatigue_rate": 0.074,
+        "speed_mps": 0.99,
+        "collision": true,
+        "collision_time_s": 4.76,
+        "min_clearance_m": -0.001,
+        "aeb_triggered": false,
+        "reason": "Wall Collision"
+      }
+    ]
   }
 }
